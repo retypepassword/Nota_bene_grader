@@ -1,0 +1,204 @@
+##remove the below '#' to install the package before opening xlsx or httr
+#install.packages('xlsx')
+library(xlsx)
+#install.packages('httr')
+library(httr)
+
+##Download the latest roster and put the path to this file
+roster <- "/Users/jeffreymiller/Desktop/NB Grades/BIS_002A_A01_A17_WQ_2016_2_10_16.xls"
+
+## Set Parameters for Analysis
+## Make a folder to hold all NB files- paste its path below
+setwd("/Users/jeffreymiller/Desktop/NB Grades")
+## 'file' is downloaded from the NB 'downloads as .xls'
+file <- "stats_7333_20160301_1512.xls"
+## This is the name of the column from the above file that corresponds to the graded assignment
+nb_file <- "NB_9_GeneRegulation.pdf"
+## Update the assignment number
+assign_num <- "9"
+## Change only once
+instruct <- "Kopp"
+# Put login info for Nota Bene here:
+EMAIL <- "jthmiller@ucdavis.edu"
+PASSWORD <- "Heteroclitus1"
+
+######################## Begin Erics program ####################
+###### Run from here ############################################
+# Specify output file for data here (perhaps not necessary if data used directly):
+OUT_FILE <- "./output.txt"
+# Set User Agent string so it doesn't look like we're scraping data with R.
+# Change to something else (e.g., Chrome) if desired. Should have no effect
+# on anything.
+ua <- add_headers("Chrome" = "Mozilla/5.0 (X11; Linux x86_64; rv:43.0) Gecko/20100101 Firefox/43.0")
+
+# Get ckey for all subsequent requests.
+l <- POST(url = "http://nb.mit.edu/pdf4/rpc?guest=1",
+    body = list(a = paste('{"email":"', EMAIL , '","password":"', PASSWORD, '"}', sep = ""),
+        cid = 0,
+        f = 'login_user'), 
+    encode = "form",
+    config = c(ua))
+login_data <- content(l, type = "application/json")
+ckey <- login_data$payload$ckey
+
+# Set ckey cookie
+ckey_cookie <- set_cookies(ckey = ckey)
+
+# Set rest of cookies (server returns the rest of the cookies when you request
+# the page with a ckey). Still need to use ckey_cookie in future requests,
+# though.
+GET(url = "http://nb.mit.edu", ua, ckey_cookie)
+ 
+# Get ids for nota bene assignments
+nota_bene_assigs <- POST(url = paste("http://nb.mit.edu/pdf4/rpc?guest=1&ckey=", ckey, sep = ""),
+    body = list(a = '{"types":["ensembles", "folders", "files", "sections"]}',
+        cid = 0,
+        f = 'getObjects'),
+    encode = "form",
+    config = c(ckey_cookie, ua))
+ 
+# Display nota bene ids (internal to the nota bene website) so user can select
+# the one for which to retrieve data
+nb_assig_data <- content(nota_bene_assigs, type = "application/json")
+titles_ids <- data.frame(titles = mapply(function(x) nb_assig_data$payload$files[[x]]$title, names(nb_assig_data$payload$files)))
+print(titles_ids)
+
+nb_id_is_valid <- function(nb_id) ! is.null(nb_assig_data$payload$files[[as.character(nb_id)]])
+repeat {
+    nb_id <- as.numeric(readline("Enter the id of the Nota Bene you wish to retrieve: "))
+    if (nb_id_is_valid(nb_id)) break
+    # Give error message for invalid ids:
+    cat("Invalid ID entered. Please try again.\n")
+}
+############# To here ##############################################################
+#### Input the number that corresponds to the intended assignment #################
+
+ensemble_id <- as.numeric(nb_assig_data$payload$files[[as.character(nb_id)]]$id_ensemble)
+
+cat("Getting data. Please wait...\n")
+
+# Get the data for all students
+students <- POST(url = paste("http://nb.mit.edu/pdf4/rpc?ckey=", ckey, sep = ""),
+    body = list(a = paste('{"id_ensemble":', ensemble_id, '}', sep = ""),
+        cid = format(Sys.time(), "%Y-%m-%d %H:%M:%OS6"),
+        f = 'getMembers'),
+    encode = "form",
+    config = c(ckey_cookie, ua))
+student_data <- content(students, type = "application/json")
+cat("Keep waiting...\n")
+
+# Get the data for the requested nota bene
+nota_bene <- POST(url = paste("http://nb.mit.edu/pdf4/rpc?ckey=", ckey, sep = ""),
+    body = list(a = paste('{"file":', nb_id, '}', sep = ""),
+        cid = format(Sys.time(), "%Y-%m-%d %H:%M:%OS6"),
+        f = 'getNotes'),
+    encode = "form",
+    config = c(ckey_cookie, ua))
+nb_data <- content(nota_bene, type = "application/json")
+cat("Keep waiting...\n")
+
+# Get just the full name, email, creation time, and comments
+get_data <- function(comment) {
+    student_info <- student_data$payload[[as.character(comment$id_author)]]
+    c(student_info$firstname, student_info$lastname, student_info$email, comment$ctime, comment$body)
+}
+data <- t(sapply(nb_data$payload$comments, get_data))
+rownames(data) <- data[,3]
+colnames(data) <- c("First Name", "Last Name", "Email", "Time", "Comment")
+####Associated Files Required
+rost <- read.xlsx(roster, 1)
+
+# Output data to OUT_FILE. Fields are quoted, so text-delimeter when importing
+# is: "
+write.table(data, '/Users/jeffreymiller/Desktop/NB_OUT_FILE', sep="\t", quote=TRUE, row.names=FALSE)
+
+############### End Erics Program ##########################################################
+############# Data contains the time that comments were made #############################
+
+#set workfile name from assignment name
+outfilename <- substr(basename(nb_file), 1, nchar(basename(nb_file)) - 4)
+
+###Split out worksheet into in objects
+wordc <- read.xlsx(file, 1)
+charc <- read.xlsx(file, 2)
+comc <- read.xlsx(file, 3)
+rost <- read.xlsx(roster, 1)
+
+###Create new dataframe for data
+data1 <- data.frame(Email.Address=comc[[1]], score=0, com=comc[[nb_file]])
+#names(data1)[names(data1)=='email']<-'Email.Address'
+
+###Zero NA in the data
+comc[is.na(comc)]<-0
+wordc[is.na(wordc)]<-0
+charc[is.na(charc)]<-0
+data1[is.na(data1)]<-0
+#tem[is.na(tem)]<-0
+
+####Evaluate and assign score ###CHANGE VALUES HERE
+sel<-(comc[[nb_file]]>=4 & wordc[[nb_file]]>=35)
+data1[[2]][sel]<-with(comc[sel,], 5)###sets the above critera to be worth 5 points
+sel<-(comc[[nb_file]]>=3 & wordc[[nb_file]]<35)
+data1[[2]][sel]<-with(comc[sel,], 3)
+sel<-(comc[[nb_file]]==2 & wordc[[nb_file]]>=20) & (comc[[nb_file]]==2 & wordc[[nb_file]]<400)
+data1[[2]][sel]<-with(comc[sel,], 3)
+sel<-(comc[[nb_file]]==2 & wordc[[nb_file]]<20)
+data1[[2]][sel]<-with(comc[sel,], 2)
+sel<-(comc[[nb_file]]==1 & wordc[[nb_file]]<=400)
+data1[[2]][sel]<-with(comc[sel,], 1)
+
+
+####Write New Workbook for sorting and spot checks
+output1 <- createWorkbook()
+sheet <- createSheet(output1, sheetName="results")
+addDataFrame(data1, sheet)
+saveWorkbook(output1, paste("NB_", assign_num, "_", outfilename, "_processed_45_25_", instruct, ".xlsx", sep=""))
+
+####Counting the flags
+length(which(data1[[2]]==2 & data1[[3]]==2))
+length(which(data1[[2]]==1 & data1[[3]]<=2))
+
+####Write new notebook for uploading assignment to smartsite
+####No-structure gradebook (only grades). Grade and student data. Use this approach if you have already set up your gradebook and you want to add scores/comments for new grade items, or you want to add or overwrite  scores/comments for existing items.
+
+##merge scores with roster via email address
+mg <-data.frame(merge(data1, rost, "Email.Address"),time=1,deadline='') ## contains email and stu id
+due.date <- '2016-02-29 18:00:00'
+try <- function(x){
+  as.POSIXlt(strtrim(x,19),format='%FT%T')< as.POSIXlt(due.date)
+}
+for (i in 1:length(mg[,1])){
+  if(mg$Email.Address[i]%in%data[,3]){
+  mg$time[i] <- data[mg$Email.Address[i],4]
+  }else{
+    mg$time[i]<- 0
+  }
+  mg$deadline[i] <- try(mg$time[i])
+}
+
+mg$score[mg$deadline==FALSE] <- 0
+
+#mg$time <- lapply(mg$time,FUN=function(x) { as.POSIXlt(strtrim(x,19),format='%FT%T')< as.POSIXlt(due.date)})
+
+###Create New Data Frame For Output
+data2 <- data.frame(Student.Id=mg[[5]], New.Item=mg[[2]])
+
+#Rename Columns to SmartSite-Friendly Format
+names(data2)[names(data2)=='Student.Id']<-'Student Id'
+#names(data2)[names(data2)=='Student.Name']<-'Student Name'
+names(data2)[names(data2)=='New.Item']<-paste(paste('NB',assign_num,sep=''),'[5]') 
+
+####Write new file
+output2 <- createWorkbook()
+sheet <- createSheet(output2, sheetName="sheet0")
+addDataFrame(data2, sheet, row.names=FALSE)
+saveWorkbook(output2, paste(outfilename, "_processed_45_25_", instruct, "_upload.xlsx", sep=""))
+###
+##### Import the above file into smartsite. Appears in the working directory (NB folder) ###
+
+
+
+
+
+
+
