@@ -20,7 +20,7 @@ assign_num <- "9"
 instruct <- "Kopp"
 # Put login info for Nota Bene here:
 EMAIL <- "jthmiller@ucdavis.edu"
-PASSWORD <- "Heteroclitus1"
+PASSWORD <- ""
 
 ######################## Begin Erics program ####################
 ###### Run from here ############################################
