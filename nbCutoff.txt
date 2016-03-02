@@ -183,7 +183,9 @@ mg <- data.frame(merge(data1, rost, "Email.Address"), ontime = 0) ## contains em
 # later to obtain the total number of on-time comments.
 due.date <- '2016-02-29 18:00:00'
 is_on_time <- function(x) {
-  as.POSIXct(strtrim(x,19),format='%FT%T') < as.POSIXct(due.date)
+  # When summed, becomes:
+  # On.Time                                                                        Total.Comments
+  c(ifelse(as.POSIXct(strtrim(x,19),format='%FT%T') < as.POSIXct(due.date), 1, 0), 1)
 }
 
 # Figure out which comments are on time and sum the number of on-time comments
@@ -191,32 +193,30 @@ is_on_time <- function(x) {
 # for each e-mail address
 # (the outer part: aggregate by list(data[, 'Email']) using sum)
 on_time_count <- aggregate(
-    sapply(FUN = is_on_time, data[, 'Time']),
+    t(sapply(FUN = is_on_time, data[, 'Time'])),
     by = list(data[, 'Email']),
     FUN = sum)
 
 # Clarify what output columns are
-names(on_time_count) <- c("Email", "On.Time.Comments")
+names(on_time_count) <- c("Email.Address", "On.Time", "Total.Comments")
 
 # Modify grades based on whether or not comments were on time
 #
-# First, copy the on_time_count table into the mg table. mg$ontime will have the
-# number of on-time comments from each student after this procedure
-for (i in 1:length(mg[,1])) {
-  if(mg$Email.Address[i] %in% on_time_count$Email){
-    mg$ontime[i] <- as.numeric(on_time_count[on_time_count['Email'] == mg$Email.Address[i]][2])
-  } else {
-    mg$ontime[i] <- 0
-  }
-}
+# First, copy the on_time_count table into the mg table. mg$On.Time.Comments
+# will have the number of on-time comments from each student after this
+# procedure
+mg <- merge(mg, on_time_count, by = "Email.Address", all.x = TRUE)
 
 # Use a maximum of 4 on-time comments (that way, if a student gave 11 on-time
 # comments, they don't get extra credit)
-mg$ontime[mg$ontime > 4] <- 4
+mg$On.Time[mg$On.Time > 4] <- 4
+
+# Can't divide by 0, so make each Total.Comments at least 1
+mg$Total.Comments[mg$Total.Comments < 1] <- 1
 
 # Apply partial credit linearly (1 comment = 25% of grade, 2 = 50% of grade, 3 =
 # 75% of grade, 4+ = 100% of grade); modify as necessary.
-mg$score <- mg$score * (mg$ontime / 4)
+mg$score <- mg$score * (mg$On.Time / mg$Total.Comments)
 
 ###Create New Data Frame For Output
 data2 <- data.frame(Student.Id=mg[[5]], New.Item=mg[[2]])
