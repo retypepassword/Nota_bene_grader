@@ -207,6 +207,10 @@ names(on_time_count) <- c("Email.Address", "On.Time", "Total.Comments")
 # procedure
 mg <- merge(mg, on_time_count, by = "Email.Address", all.x = TRUE)
 
+# Replace NAs from merge with 0s (or we'll get a can't divide error later)
+mg$On.Time[is.na(mg$On.Time)] <- 0
+mg$Total.Comments[is.na(mg$Total.Comments)] <- 0
+
 # Use a maximum of 4 on-time comments (that way, if a student gave 11 on-time
 # comments, they don't get extra credit)
 mg$On.Time[mg$On.Time > 4] <- 4
