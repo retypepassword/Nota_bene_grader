@@ -25,7 +25,7 @@ PASSWORD <- ""
 ######################## Begin Erics program ####################
 ###### Run from here ############################################
 # Specify output file for data here (perhaps not necessary if data used directly):
-OUT_FILE <- "./output.txt"
+# OUT_FILE <- "./output.txt"
 # Set User Agent string so it doesn't look like we're scraping data with R.
 # Change to something else (e.g., Chrome) if desired. Should have no effect
 # on anything.
@@ -60,7 +60,21 @@ nota_bene_assigs <- POST(url = paste("http://nb.mit.edu/pdf4/rpc?guest=1&ckey=",
 # Display nota bene ids (internal to the nota bene website) so user can select
 # the one for which to retrieve data
 nb_assig_data <- content(nota_bene_assigs, type = "application/json")
-titles_ids <- data.frame(titles = mapply(function(x) nb_assig_data$payload$files[[x]]$title, names(nb_assig_data$payload$files)))
+
+# Figure out which class to get nota benes for
+class_ids <- data.frame(classes = mapply(function(x) nb_assig_data$payload$ensembles[[x]]$name, names(nb_assig_data$payload$ensembles)))
+print(class_ids)
+
+class_id_is_valid <- function(class_id) ! is.null(nb_assig_data$payload$ensembles[[as.character(class_id)]])
+repeat {
+    class_id <- as.numeric(readline("Enter the id of the class: "))
+    if (class_id_is_valid(class_id)) break
+    # Give error message for invalid ids:
+    cat("Invalid Class ID entered. Please try again.\n")
+}
+
+# Figure out which nota bene to retrieve
+titles_ids <- data.frame(titles = mapply(function(x) nb_assig_data$payload$files[[x]]$title, Filter(function(x) nb_assig_data$payload$files[[x]]$id_ensemble == class_id, names(nb_assig_data$payload$files))))
 print(titles_ids)
 
 nb_id_is_valid <- function(nb_id) ! is.null(nb_assig_data$payload$files[[as.character(nb_id)]])
@@ -73,6 +87,7 @@ repeat {
 ############# To here ##############################################################
 #### Input the number that corresponds to the intended assignment #################
 
+# Should be exactly the same as the class id entered above
 ensemble_id <- as.numeric(nb_assig_data$payload$files[[as.character(nb_id)]]$id_ensemble)
 
 cat("Getting data. Please wait...\n")
@@ -110,7 +125,7 @@ rost <- read.xlsx(roster, 1)
 
 # Output data to OUT_FILE. Fields are quoted, so text-delimeter when importing
 # is: "
-write.table(data, '/Users/jeffreymiller/Desktop/NB_OUT_FILE', sep="\t", quote=TRUE, row.names=FALSE)
+# write.table(data, '/Users/jeffreymiller/Desktop/NB_OUT_FILE', sep="\t", quote=TRUE, row.names=FALSE)
 
 ############### End Erics Program ##########################################################
 ############# Data contains the time that comments were made #############################
@@ -162,23 +177,50 @@ length(which(data1[[2]]==1 & data1[[3]]<=2))
 ####No-structure gradebook (only grades). Grade and student data. Use this approach if you have already set up your gradebook and you want to add scores/comments for new grade items, or you want to add or overwrite  scores/comments for existing items.
 
 ##merge scores with roster via email address
-mg <-data.frame(merge(data1, rost, "Email.Address"),time=1,deadline='') ## contains email and stu id
+mg <- data.frame(merge(data1, rost, "Email.Address"), ontime = 0) ## contains email and stu id
+
+# Returns 1 if student's comment is on time; 0 otherwise. We'll sum up the 1's
+# later to obtain the total number of on-time comments.
 due.date <- '2016-02-29 18:00:00'
-try <- function(x){
-  as.POSIXlt(strtrim(x,19),format='%FT%T')< as.POSIXlt(due.date)
-}
-for (i in 1:length(mg[,1])){
-  if(mg$Email.Address[i]%in%data[,3]){
-  mg$time[i] <- data[mg$Email.Address[i],4]
-  }else{
-    mg$time[i]<- 0
-  }
-  mg$deadline[i] <- try(mg$time[i])
+is_on_time <- function(x) {
+  # When summed, becomes:
+  # On.Time                                                                        Total.Comments
+  c(ifelse(as.POSIXct(strtrim(x,19),format='%FT%T') < as.POSIXct(due.date), 1, 0), 1)
 }
 
-mg$score[mg$deadline==FALSE] <- 0
+# Figure out which comments are on time and sum the number of on-time comments
+# (this part: sapply(FUN = is_on_time, data[, 'Time']))
+# for each e-mail address
+# (the outer part: aggregate by list(data[, 'Email']) using sum)
+on_time_count <- aggregate(
+    t(sapply(FUN = is_on_time, data[, 'Time'])),
+    by = list(data[, 'Email']),
+    FUN = sum)
 
-#mg$time <- lapply(mg$time,FUN=function(x) { as.POSIXlt(strtrim(x,19),format='%FT%T')< as.POSIXlt(due.date)})
+# Clarify what output columns are
+names(on_time_count) <- c("Email.Address", "On.Time", "Total.Comments")
+
+# Modify grades based on whether or not comments were on time
+#
+# First, copy the on_time_count table into the mg table. mg$On.Time.Comments
+# will have the number of on-time comments from each student after this
+# procedure
+mg <- merge(mg, on_time_count, by = "Email.Address", all.x = TRUE)
+
+# Replace NAs from merge with 0s (or we'll get a can't divide error later)
+mg$On.Time[is.na(mg$On.Time)] <- 0
+mg$Total.Comments[is.na(mg$Total.Comments)] <- 0
+
+# Use a maximum of 4 on-time comments (that way, if a student gave 11 on-time
+# comments, they don't get extra credit)
+mg$On.Time[mg$On.Time > 4] <- 4
+
+# Can't divide by 0, so make each Total.Comments at least 1
+mg$Total.Comments[mg$Total.Comments < 1] <- 1
+
+# Apply partial credit linearly (1 comment = 25% of grade, 2 = 50% of grade, 3 =
+# 75% of grade, 4+ = 100% of grade); modify as necessary.
+mg$score <- mg$score * (mg$On.Time / mg$Total.Comments)
 
 ###Create New Data Frame For Output
 data2 <- data.frame(Student.Id=mg[[5]], New.Item=mg[[2]])
