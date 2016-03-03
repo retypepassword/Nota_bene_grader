@@ -215,8 +215,9 @@ mg$Total.Comments[is.na(mg$Total.Comments)] <- 0
 # comments, they don't get extra credit)
 mg$On.Time[mg$On.Time > 4] <- 4
 
-# Can't divide by 0, so make each Total.Comments at least 1
+# Can't divide by 0, so make each Total.Comments at least 1, but no greater than 4
 mg$Total.Comments[mg$Total.Comments < 1] <- 1
+mg$Total.Comments[mg$Total.Comments > 4] <- 4
 
 # Apply partial credit linearly (1 comment = 25% of grade, 2 = 50% of grade, 3 =
 # 75% of grade, 4+ = 100% of grade); modify as necessary.
