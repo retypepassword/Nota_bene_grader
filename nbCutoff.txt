@@ -76,6 +76,17 @@ repeat {
     cat("Invalid ID entered. Please try again.\n")
 }
 
+# Get the due date for the retrieved nota bene (assuming the displayed time
+# is written in Pacific Time). Convert to UTC because comment submission times
+# are stored in UTC.
+due_date <- as.POSIXct(
+    format(
+        as.POSIXct(nb_assig_data$payload$files[[as.character(nb_id)]]$due,
+        format = "%FT%T",
+        tz = "America/Los_Angeles"),
+     tz = "UTC"),
+tz = "UTC")
+
 # Should be exactly the same as the class id entered above
 ensemble_id <- as.numeric(nb_assig_data$payload$files[[as.character(nb_id)]]$id_ensemble)
 
@@ -156,12 +167,8 @@ count_words_and_characters <- function(comment) {
 is_on_time <- function(x) {
   # When summed, becomes:
   # On.Time                                                                        Total.Comments
-  c(ifelse(as.POSIXct(strtrim(x,19),format='%FT%T') < as.POSIXct(due.date), 1, 0), 1)
+  c(ifelse(as.POSIXct(x, format='%FT%T') < as.POSIXct(due_date), 1, 0), 1)
 }
-
-# Returns 1 if student's comment is on time; 0 otherwise. We'll sum up the 1's
-# later to obtain the total number of on-time comments.
-due.date <- '2016-02-29 18:00:00'
 
 # Figure out which comments are on time and sum the number of on-time comments
 # (this part: sapply(FUN = is_on_time, data[, 'Time']))
