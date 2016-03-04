@@ -10,23 +10,13 @@ roster <- "BIS_002A_A01_A17_WQ_2016_2_10_16.xls"
 ## Set Parameters for Analysis
 ## Make a folder to hold all NB files- paste its path below
 # setwd("/Users/jeffreymiller/Desktop/NB Grades")
-## 'file' is downloaded from the NB 'downloads as .xls'
-# file <- "stats_7333_20160301_1512.xls"
-## This is the name of the column from the above file that corresponds to the graded assignment
-# Gets overwritten in a line down below using the JSON method of retrieving data
-# nb_file <- "NB_9_GeneRegulation.pdf"
-## Update the assignment number
-# assign_num <- "9"
+
 ## Change only once
 instruct <- "Kopp"
 # Put login info for Nota Bene here:
 EMAIL <- ""
 PASSWORD <- ""
 
-######################## Begin Erics program ####################
-###### Run from here ############################################
-# Specify output file for data here (perhaps not necessary if data used directly):
-# OUT_FILE <- "./output.txt"
 # Set User Agent string so it doesn't look like we're scraping data with R.
 # Change to something else (e.g., Chrome) if desired. Should have no effect
 # on anything.
@@ -85,8 +75,6 @@ repeat {
     # Give error message for invalid ids:
     cat("Invalid ID entered. Please try again.\n")
 }
-############# To here ##############################################################
-#### Input the number that corresponds to the intended assignment #################
 
 # Should be exactly the same as the class id entered above
 ensemble_id <- as.numeric(nb_assig_data$payload$files[[as.character(nb_id)]]$id_ensemble)
@@ -121,15 +109,11 @@ get_data <- function(comment) {
 data <- t(sapply(nb_data$payload$comments, get_data))
 rownames(data) <- data[,3]
 colnames(data) <- c("First Name", "Last Name", "Email", "Time", "Comment")
-####Associated Files Required
-rost <- read.xlsx(roster, 1)
 
-# Output data to OUT_FILE. Fields are quoted, so text-delimeter when importing
-# is: "
-# write.table(data, '/Users/jeffreymiller/Desktop/NB_OUT_FILE', sep="\t", quote=TRUE, row.names=FALSE)
+# Needed for Smartsite-friendly output
+assign_num <- as.numeric(readline("Enter the assignment number (1 - 10): "))
 
-############### End Erics Program ##########################################################
-############# Data contains the time that comments were made #############################
+cat("Calculating scores...")
 
 #set workfile name from assignment name
 nb_file <- nb_assig_data$payload$files[[as.character(nb_id)]]$title
@@ -137,17 +121,6 @@ outfilename <- substr(basename(nb_file), 1, nchar(basename(nb_file)) - 4)
 
 ###Split out worksheet into in objects
 rost <- read.xlsx(roster, 1)
-
-###Create new dataframe for data
-# data1 <- data.frame(Email.Address=comc[[1]], score=0, com=comc[[nb_file]])
-#names(data1)[names(data1)=='email']<-'Email.Address'
-
-###Zero NA in the data
-# comc[is.na(comc)]<-0
-# wordc[is.na(wordc)]<-0
-# charc[is.na(charc)]<-0
-# data1[is.na(data1)]<-0
-#tem[is.na(tem)]<-0
 
 # As of 3/3/16, on the Nota Bene website, the character count, comment count,
 # and word count statistics for the XLS file (when one clicks Download as XLS)
@@ -199,6 +172,7 @@ on_time_count <- aggregate(
     by = list(data[, 'Email']),
     FUN = sum)
 
+# Sum word counts and character counts for each e-mail address
 comment_statistics <- aggregate(
     t(sapply(data[, "Comment"], FUN = count_words_and_characters)),
     by = list(data[, "Email"]),
@@ -226,18 +200,6 @@ stats$Score[sel] <- 2
 sel <- (stats$Total.Comments == 1 & stats$Word.Count <= 400)
 stats$Score[sel] <- 1
 
-####Write New Workbook for sorting and spot checks
-output1 <- createWorkbook()
-sheet <- createSheet(output1, sheetName="results")
-addDataFrame(stats, sheet)
-saveWorkbook(output1, paste(outfilename, "_processed_45_25_", instruct, ".xlsx", sep=""))
-
-####Write new notebook for uploading assignment to smartsite
-# No-structure gradebook (only grades). Grade and student data. Use this
-# approach if you have already set up your gradebook and you want to add
-# scores/comments for new grade items, or you want to add or overwrite
-# scores/comments for existing items.
-
 ##merge scores with roster via email address
 mg <- merge(rost, stats, "Email.Address", all.x = TRUE) ## contains email and stu id
 
@@ -261,13 +223,24 @@ mg$Total.Comments[mg$Total.Comments > 4] <- 4
 # 75% of grade, 4+ = 100% of grade); modify as necessary.
 mg$Score <- mg$Score * (mg$On.Time / mg$Total.Comments)
 
+# Write New Workbook for sorting and spot checks (contains all data used for
+# grading and then some)
+output1 <- createWorkbook()
+sheet <- createSheet(output1, sheetName="results")
+addDataFrame(mg, sheet)
+saveWorkbook(output1, paste(outfilename, "_processed_45_25_", instruct, ".xlsx", sep=""))
+
+####Write new notebook for uploading assignment to smartsite
+# No-structure gradebook (only grades). Grade and student data. Use this
+# approach if you have already set up your gradebook and you want to add
+# scores/comments for new grade items, or you want to add or overwrite
+# scores/comments for existing items.
+
 ###Create New Data Frame For Output
 data2 <- data.frame(Student.Id=mg$User.ID, New.Item=mg$Score)
 
 #Rename Columns to SmartSite-Friendly Format
-names(data2)[names(data2)=='Student.Id']<-'Student Id'
-#names(data2)[names(data2)=='Student.Name']<-'Student Name'
-names(data2)[names(data2)=='New.Item']<-paste(paste('NB',sep=''),'[5]') 
+names(data2) = c("Student Id", paste("NB", assign_num, "[5]", sep=""))
 
 ####Write new file
 output2 <- createWorkbook()
@@ -276,10 +249,4 @@ addDataFrame(data2, sheet, row.names=FALSE)
 saveWorkbook(output2, paste(outfilename, "_processed_45_25_", instruct, "_upload.xlsx", sep=""))
 ###
 ##### Import the above file into smartsite. Appears in the working directory (NB folder) ###
-
-
-
-
-
-
 
