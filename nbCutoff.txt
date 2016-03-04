@@ -11,11 +11,12 @@ roster <- "BIS_002A_A01_A17_WQ_2016_2_10_16.xls"
 ## Make a folder to hold all NB files- paste its path below
 # setwd("/Users/jeffreymiller/Desktop/NB Grades")
 ## 'file' is downloaded from the NB 'downloads as .xls'
-file <- "stats_7333_20160301_1512.xls"
+# file <- "stats_7333_20160301_1512.xls"
 ## This is the name of the column from the above file that corresponds to the graded assignment
-nb_file <- "NB_9_GeneRegulation.pdf"
+# Gets overwritten in a line down below using the JSON method of retrieving data
+# nb_file <- "NB_9_GeneRegulation.pdf"
 ## Update the assignment number
-assign_num <- "9"
+# assign_num <- "9"
 ## Change only once
 instruct <- "Kopp"
 # Put login info for Nota Bene here:
@@ -131,65 +132,63 @@ rost <- read.xlsx(roster, 1)
 ############# Data contains the time that comments were made #############################
 
 #set workfile name from assignment name
+nb_file <- nb_assig_data$payload$files[[as.character(nb_id)]]$title
 outfilename <- substr(basename(nb_file), 1, nchar(basename(nb_file)) - 4)
 
 ###Split out worksheet into in objects
-wordc <- read.xlsx(file, 1)
-charc <- read.xlsx(file, 2)
-comc <- read.xlsx(file, 3)
 rost <- read.xlsx(roster, 1)
 
 ###Create new dataframe for data
-data1 <- data.frame(Email.Address=comc[[1]], score=0, com=comc[[nb_file]])
+# data1 <- data.frame(Email.Address=comc[[1]], score=0, com=comc[[nb_file]])
 #names(data1)[names(data1)=='email']<-'Email.Address'
 
 ###Zero NA in the data
-comc[is.na(comc)]<-0
-wordc[is.na(wordc)]<-0
-charc[is.na(charc)]<-0
-data1[is.na(data1)]<-0
+# comc[is.na(comc)]<-0
+# wordc[is.na(wordc)]<-0
+# charc[is.na(charc)]<-0
+# data1[is.na(data1)]<-0
 #tem[is.na(tem)]<-0
 
-####Evaluate and assign score ###CHANGE VALUES HERE
-sel<-(comc[[nb_file]]>=4 & wordc[[nb_file]]>=35)
-data1[[2]][sel]<-with(comc[sel,], 5)###sets the above critera to be worth 5 points
-sel<-(comc[[nb_file]]>=3 & wordc[[nb_file]]<35)
-data1[[2]][sel]<-with(comc[sel,], 3)
-sel<-(comc[[nb_file]]==2 & wordc[[nb_file]]>=20) & (comc[[nb_file]]==2 & wordc[[nb_file]]<400)
-data1[[2]][sel]<-with(comc[sel,], 3)
-sel<-(comc[[nb_file]]==2 & wordc[[nb_file]]<20)
-data1[[2]][sel]<-with(comc[sel,], 2)
-sel<-(comc[[nb_file]]==1 & wordc[[nb_file]]<=400)
-data1[[2]][sel]<-with(comc[sel,], 1)
+# As of 3/3/16, on the Nota Bene website, the character count, comment count,
+# and word count statistics for the XLS file (when one clicks Download as XLS)
+# are calculated within a database query. See Line 312 in
+# github:nbproject/nbproject/apps/base/annotations.py in commit c6bb13a (Jan 10,
+# 2016) for the relevant query.
+# URL: https://github.com/nbproject/nbproject/blob/c6bb13ae30d992d03d9fb4ecad75e91af5208df4/apps/base/annotations.py#L312
+#
+# Comment count is calculated using: count(v.id)
+# Word count is calculated using whitespace: sum(array_length(regexp_split_to_array(c.body, E'\\\\s+'), 1))
+# Character count is calculated using: sum(length(c.body))
+#
+# These data can easily be reproduced in R from the JSON data:
 
+# Calculates word count for each comment
+count_words <- function(comment) {
+   sum(attr(gregexpr("\\s+", comment)[[1]], "match.length")) + 1
+}
 
-####Write New Workbook for sorting and spot checks
-output1 <- createWorkbook()
-sheet <- createSheet(output1, sheetName="results")
-addDataFrame(data1, sheet)
-saveWorkbook(output1, paste("NB_", assign_num, "_", outfilename, "_processed_45_25_", instruct, ".xlsx", sep=""))
+# Calculates character count for each comment
+count_characters <- function(comment) {
+    nchar(comment)
+}
 
-####Counting the flags
-length(which(data1[[2]]==2 & data1[[3]]==2))
-length(which(data1[[2]]==1 & data1[[3]]<=2))
+# Convenience function to string the word count and character count into a list
+count_words_and_characters <- function(comment) {
+    c(count_words(comment), count_characters(comment))
+}
 
-####Write new notebook for uploading assignment to smartsite
-# No-structure gradebook (only grades). Grade and student data. Use this
-# approach if you have already set up your gradebook and you want to add
-# scores/comments for new grade items, or you want to add or overwrite
-# scores/comments for existing items.
-
-##merge scores with roster via email address
-mg <- data.frame(merge(data1, rost, "Email.Address"), ontime = 0) ## contains email and stu id
-
-# Returns 1 if student's comment is on time; 0 otherwise. We'll sum up the 1's
-# later to obtain the total number of on-time comments.
-due.date <- '2016-02-29 18:00:00'
+# Returns (1, 1) for on time comments and (0, 1) for late comments. The lists
+# can be summed up later to obtain, for each student, the total number of on
+# time comments and the total number of comments
 is_on_time <- function(x) {
   # When summed, becomes:
   # On.Time                                                                        Total.Comments
   c(ifelse(as.POSIXct(strtrim(x,19),format='%FT%T') < as.POSIXct(due.date), 1, 0), 1)
 }
+
+# Returns 1 if student's comment is on time; 0 otherwise. We'll sum up the 1's
+# later to obtain the total number of on-time comments.
+due.date <- '2016-02-29 18:00:00'
 
 # Figure out which comments are on time and sum the number of on-time comments
 # (this part: sapply(FUN = is_on_time, data[, 'Time']))
@@ -200,19 +199,55 @@ on_time_count <- aggregate(
     by = list(data[, 'Email']),
     FUN = sum)
 
+comment_statistics <- aggregate(
+    t(sapply(data[, "Comment"], FUN = count_words_and_characters)),
+    by = list(data[, "Email"]),
+    FUN = sum)
+
 # Clarify what output columns are
+names(comment_statistics) <- c("Email.Address", "Word.Count", "Character.Count")
 names(on_time_count) <- c("Email.Address", "On.Time", "Total.Comments")
 
-# Modify grades based on whether or not comments were on time
-#
-# First, copy the on_time_count table into the mg table. mg$On.Time.Comments
-# will have the number of on-time comments from each student after this
-# procedure
-mg <- merge(mg, on_time_count, by = "Email.Address", all.x = TRUE)
+# Merge the two statistics data.frames
+stats <- data.frame(merge(comment_statistics, on_time_count, by = "Email.Address"), Score = 0)
 
+####Evaluate and assign score ###CHANGE VALUES HERE
+
+# Students with at least 4 comments and a total of 35 words across the 4
+# comments get 5 points
+sel <- (stats$Total.Comments >= 4 & stats$Word.Count >= 35)
+stats$Score[sel] <- 5
+sel <- (stats$Total.Comments >= 3 & stats$Word.Count < 35)
+stats$Score[sel] <- 3
+sel <- (stats$Total.Comments == 2 & stats$Word.Count >= 20) & (stats$Total.Comments == 2 & stats$Word.Count < 400)
+stats$Score[sel] <- 3
+sel <- (stats$Total.Comments == 2 & stats$Word.Count < 20)
+stats$Score[sel] <- 2
+sel <- (stats$Total.Comments == 1 & stats$Word.Count <= 400)
+stats$Score[sel] <- 1
+
+####Write New Workbook for sorting and spot checks
+output1 <- createWorkbook()
+sheet <- createSheet(output1, sheetName="results")
+addDataFrame(stats, sheet)
+saveWorkbook(output1, paste(outfilename, "_processed_45_25_", instruct, ".xlsx", sep=""))
+
+####Write new notebook for uploading assignment to smartsite
+# No-structure gradebook (only grades). Grade and student data. Use this
+# approach if you have already set up your gradebook and you want to add
+# scores/comments for new grade items, or you want to add or overwrite
+# scores/comments for existing items.
+
+##merge scores with roster via email address
+mg <- merge(rost, stats, "Email.Address", all.x = TRUE) ## contains email and stu id
+
+# Modify grades based on whether or not comments were on time
 # Replace NAs from merge with 0s (or we'll get a can't divide error later)
 mg$On.Time[is.na(mg$On.Time)] <- 0
 mg$Total.Comments[is.na(mg$Total.Comments)] <- 0
+mg$Word.Count[is.na(mg$Word.Count)] <- 0
+mg$Character.Count[is.na(mg$Character.Count)] <- 0
+mg$Score[is.na(mg$Score)] <- 0
 
 # Use a maximum of 4 on-time comments (that way, if a student gave 11 on-time
 # comments, they don't get extra credit)
@@ -224,15 +259,15 @@ mg$Total.Comments[mg$Total.Comments > 4] <- 4
 
 # Apply partial credit linearly (1 comment = 25% of grade, 2 = 50% of grade, 3 =
 # 75% of grade, 4+ = 100% of grade); modify as necessary.
-mg$score <- mg$score * (mg$On.Time / mg$Total.Comments)
+mg$Score <- mg$Score * (mg$On.Time / mg$Total.Comments)
 
 ###Create New Data Frame For Output
-data2 <- data.frame(Student.Id=mg[[5]], New.Item=mg[[2]])
+data2 <- data.frame(Student.Id=mg$User.ID, New.Item=mg$Score)
 
 #Rename Columns to SmartSite-Friendly Format
 names(data2)[names(data2)=='Student.Id']<-'Student Id'
 #names(data2)[names(data2)=='Student.Name']<-'Student Name'
-names(data2)[names(data2)=='New.Item']<-paste(paste('NB',assign_num,sep=''),'[5]') 
+names(data2)[names(data2)=='New.Item']<-paste(paste('NB',sep=''),'[5]') 
 
 ####Write new file
 output2 <- createWorkbook()
