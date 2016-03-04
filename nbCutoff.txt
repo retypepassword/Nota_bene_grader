@@ -1,6 +1,6 @@
 ##remove the below '#' to install the package before opening xlsx or httr
 #install.packages('xlsx')
-library(xlsx)
+suppressPackageStartupMessages(library(xlsx))
 #install.packages('httr')
 library(httr)
 
@@ -16,6 +16,8 @@ instruct <- "Kopp"
 # Put login info for Nota Bene here:
 EMAIL <- ""
 PASSWORD <- ""
+
+STDIN <- file("stdin")
 
 # Set User Agent string so it doesn't look like we're scraping data with R.
 # Change to something else (e.g., Chrome) if desired. Should have no effect
@@ -38,7 +40,7 @@ ckey_cookie <- set_cookies(ckey = ckey)
 # Set rest of cookies (server returns the rest of the cookies when you request
 # the page with a ckey). Still need to use ckey_cookie in future requests,
 # though.
-GET(url = "http://nb.mit.edu", ua, ckey_cookie)
+invisible(GET(url = "http://nb.mit.edu", ua, ckey_cookie))
  
 # Get ids for nota bene assignments
 nota_bene_assigs <- POST(url = paste("http://nb.mit.edu/pdf4/rpc?guest=1&ckey=", ckey, sep = ""),
@@ -58,7 +60,8 @@ print(class_ids)
 
 class_id_is_valid <- function(class_id) ! is.null(nb_assig_data$payload$ensembles[[as.character(class_id)]])
 repeat {
-    class_id <- as.numeric(readline("Enter the id of the class: "))
+    cat("Enter the id of the class (Ctrl + D to quit): ")
+    class_id <- as.numeric(readLines(STDIN, 1))
     if (class_id_is_valid(class_id)) break
     # Give error message for invalid ids:
     cat("Invalid Class ID entered. Please try again.\n")
@@ -70,7 +73,8 @@ print(titles_ids)
 
 nb_id_is_valid <- function(nb_id) ! is.null(nb_assig_data$payload$files[[as.character(nb_id)]])
 repeat {
-    nb_id <- as.numeric(readline("Enter the id of the Nota Bene you wish to retrieve: "))
+    cat("Enter the id of the Nota Bene you wish to retrieve (Ctrl + D to quit): ")
+    nb_id <- as.numeric(readLines(STDIN, 1))
     if (nb_id_is_valid(nb_id)) break
     # Give error message for invalid ids:
     cat("Invalid ID entered. Please try again.\n")
@@ -123,7 +127,8 @@ rownames(data) <- data[,3]
 colnames(data) <- c("First Name", "Last Name", "Email", "Time", "Comment")
 
 # Needed for Smartsite-friendly output
-assign_num <- as.numeric(readline("Enter the assignment number (1 - 10): "))
+cat("Enter the assignment number (1 - 10): ")
+assign_num <- as.numeric(readLines(STDIN, 1))
 
 cat("Calculating scores...\n")
 
