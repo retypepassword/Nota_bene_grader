@@ -5,11 +5,11 @@ library(xlsx)
 library(httr)
 
 ##Download the latest roster and put the path to this file
-roster <- "/Users/jeffreymiller/Desktop/NB Grades/BIS_002A_A01_A17_WQ_2016_2_10_16.xls"
+roster <- "BIS_002A_A01_A17_WQ_2016_2_10_16.xls"
 
 ## Set Parameters for Analysis
 ## Make a folder to hold all NB files- paste its path below
-setwd("/Users/jeffreymiller/Desktop/NB Grades")
+# setwd("/Users/jeffreymiller/Desktop/NB Grades")
 ## 'file' is downloaded from the NB 'downloads as .xls'
 file <- "stats_7333_20160301_1512.xls"
 ## This is the name of the column from the above file that corresponds to the graded assignment
@@ -19,7 +19,7 @@ assign_num <- "9"
 ## Change only once
 instruct <- "Kopp"
 # Put login info for Nota Bene here:
-EMAIL <- "jthmiller@ucdavis.edu"
+EMAIL <- ""
 PASSWORD <- ""
 
 ######################## Begin Erics program ####################
@@ -174,7 +174,10 @@ length(which(data1[[2]]==2 & data1[[3]]==2))
 length(which(data1[[2]]==1 & data1[[3]]<=2))
 
 ####Write new notebook for uploading assignment to smartsite
-####No-structure gradebook (only grades). Grade and student data. Use this approach if you have already set up your gradebook and you want to add scores/comments for new grade items, or you want to add or overwrite  scores/comments for existing items.
+# No-structure gradebook (only grades). Grade and student data. Use this
+# approach if you have already set up your gradebook and you want to add
+# scores/comments for new grade items, or you want to add or overwrite
+# scores/comments for existing items.
 
 ##merge scores with roster via email address
 mg <- data.frame(merge(data1, rost, "Email.Address"), ontime = 0) ## contains email and stu id
