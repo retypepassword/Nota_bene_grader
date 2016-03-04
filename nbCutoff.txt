@@ -22,7 +22,7 @@ STDIN <- file("stdin")
 # Set User Agent string so it doesn't look like we're scraping data with R.
 # Change to something else (e.g., Chrome) if desired. Should have no effect
 # on anything.
-ua <- add_headers("Chrome" = "Mozilla/5.0 (X11; Linux x86_64; rv:43.0) Gecko/20100101 Firefox/43.0")
+ua <- add_headers("User-Agent" = "Mozilla/5.0 (X11; Linux x86_64; rv:43.0) Gecko/20100101 Firefox/43.0")
 
 # Get ckey for all subsequent requests.
 l <- POST(url = "http://nb.mit.edu/pdf4/rpc?guest=1",
