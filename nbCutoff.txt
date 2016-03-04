@@ -78,14 +78,15 @@ repeat {
 
 # Get the due date for the retrieved nota bene (assuming the displayed time
 # is written in Pacific Time). Convert to UTC because comment submission times
-# are stored in UTC.
+# are stored in UTC. Store as Pacific Time (no tz defaults to local time) even
+# though it's actually UTC so less code has to be written later.
 due_date <- as.POSIXct(
     format(
         as.POSIXct(nb_assig_data$payload$files[[as.character(nb_id)]]$due,
         format = "%FT%T",
         tz = "America/Los_Angeles"),
-     tz = "UTC"),
-tz = "UTC")
+     tz = "UTC")
+)
 
 # Should be exactly the same as the class id entered above
 ensemble_id <- as.numeric(nb_assig_data$payload$files[[as.character(nb_id)]]$id_ensemble)
@@ -124,7 +125,7 @@ colnames(data) <- c("First Name", "Last Name", "Email", "Time", "Comment")
 # Needed for Smartsite-friendly output
 assign_num <- as.numeric(readline("Enter the assignment number (1 - 10): "))
 
-cat("Calculating scores...")
+cat("Calculating scores...\n")
 
 #set workfile name from assignment name
 nb_file <- nb_assig_data$payload$files[[as.character(nb_id)]]$title
@@ -165,9 +166,9 @@ count_words_and_characters <- function(comment) {
 # can be summed up later to obtain, for each student, the total number of on
 # time comments and the total number of comments
 is_on_time <- function(x) {
-  # When summed, becomes:
-  # On.Time                                                                        Total.Comments
-  c(ifelse(as.POSIXct(x, format='%FT%T') < as.POSIXct(due_date), 1, 0), 1)
+  # When summed, becomes
+  # On.Time                                                 Total.Comments
+  c(ifelse(as.POSIXct(x, format='%FT%T') < due_date, 1, 0), 1)
 }
 
 # Figure out which comments are on time and sum the number of on-time comments
