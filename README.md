@@ -1,11 +1,10 @@
 # Nota_bene_grader
 First time set-up:  
 * Download class roster and update file path in the script
-* Update the instructor, if necessary
-* Modify the script by entering your NB username and password in the appropriate
-  locations
-* Change grading mode and partial credit function, if desired
-* Uncomment and insert path to a working directory, if desired
+* Update the instructor
+* Enter your NB username and password in the appropriate locations
+* Set grading mode and partial credit function
+* Uncomment and insert path to a working directory
 
 Usage:  
 * Run the script using `Rscript nbCutoff.txt` and follow prompts
