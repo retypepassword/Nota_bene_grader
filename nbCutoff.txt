@@ -112,6 +112,10 @@ repeat {
     cat("Invalid ID entered. Please try again.\n")
 }
 
+# Needed for Smartsite-friendly output
+cat("Enter the assignment number (1 - 10): ")
+assign_num <- as.numeric(readLines(STDIN, 1))
+
 # Get the due date for the retrieved nota bene (assuming the displayed time
 # is written in Pacific Time). Convert to UTC because comment submission times
 # are stored in UTC. Store as Pacific Time (no tz defaults to local time) even
@@ -157,10 +161,6 @@ get_data <- function(comment) {
 data <- t(sapply(nb_data$payload$comments, get_data))
 rownames(data) <- data[,3]
 colnames(data) <- c("First Name", "Last Name", "Email", "Time", "Comment")
-
-# Needed for Smartsite-friendly output
-cat("Enter the assignment number (1 - 10): ")
-assign_num <- as.numeric(readLines(STDIN, 1))
 
 ################################################################################
 #                               Score Calculation                              #
