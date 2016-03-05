@@ -1,35 +1,60 @@
 ##remove the below '#' to install the package before opening xlsx or httr
 #install.packages('xlsx')
-library(xlsx)
+suppressPackageStartupMessages(library(xlsx))
 #install.packages('httr')
 library(httr)
 
+################################################################################
+#                              User Settings                                   #
+################################################################################
+
+
 ##Download the latest roster and put the path to this file
-roster <- "/Users/jeffreymiller/Desktop/NB Grades/BIS_002A_A01_A17_WQ_2016_2_10_16.xls"
+roster <- "BIS_002A_A01_A17_WQ_2016_2_10_16.xls"
 
 ## Set Parameters for Analysis
 ## Make a folder to hold all NB files- paste its path below
-setwd("/Users/jeffreymiller/Desktop/NB Grades")
-## 'file' is downloaded from the NB 'downloads as .xls'
-file <- "stats_7333_20160301_1512.xls"
-## This is the name of the column from the above file that corresponds to the graded assignment
-nb_file <- "NB_9_GeneRegulation.pdf"
-## Update the assignment number
-assign_num <- "9"
+# setwd("/Users/jeffreymiller/Desktop/NB Grades")
+
 ## Change only once
 instruct <- "Kopp"
+
 # Put login info for Nota Bene here:
-EMAIL <- "jthmiller@ucdavis.edu"
+EMAIL <- ""
 PASSWORD <- ""
 
-######################## Begin Erics program ####################
-###### Run from here ############################################
-# Specify output file for data here (perhaps not necessary if data used directly):
-# OUT_FILE <- "./output.txt"
+# Grading mode (choice of 0: No credit if late, 1: Partial credit if late 1
+# minute or less, 2: Partial credit if late 2 minutes or less, etc.)
+#
+# Partial credit is applied using the function:
+# f(x) = (-e^((2/a)*e*x-(2*e-ln(5)))+5)/5
+# where e is the constant, x is minutes after due date, and a is minutes past
+# the due date after which no partial credit is applied. f(x) is the percentage
+# of full comment credit given to a comment expressed as a decimal.
+GRADE_MODE <- 0
+
+PARTIAL_CREDIT <- function(x) {
+    (-exp((2/GRADE_MODE) * exp(1) * x - (2 * exp(1) - log(5))) + 5) / 5
+}
+
+
+# Don't need to change anything below this line ################################
+
+################################################################################
+#                                Data Retrieval                                #
+################################################################################
+
+STDIN <- file("stdin")
+
 # Set User Agent string so it doesn't look like we're scraping data with R.
 # Change to something else (e.g., Chrome) if desired. Should have no effect
 # on anything.
-ua <- add_headers("Chrome" = "Mozilla/5.0 (X11; Linux x86_64; rv:43.0) Gecko/20100101 Firefox/43.0")
+# Firefox 44.0 on Linux
+ua <- add_headers("User-Agent" = "Mozilla/5.0 (X11; Linux x86_64; rv:44.0) Gecko/20100101 Firefox/44.0")
+# Chrome 45.0 on Windows 10
+# ua <- add_headers("User-Agent" = "Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/45.0.2454.93 Safari/537.36")
+# Safari 601.1.56 on OS X
+# ua <- add_headers("User-Agent" = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_11) AppleWebKit/601.1.56 (KHTML, like Gecko) Version/9.0 Safari/601.1.56")
 
 # Get ckey for all subsequent requests.
 l <- POST(url = "http://nb.mit.edu/pdf4/rpc?guest=1",
@@ -47,7 +72,7 @@ ckey_cookie <- set_cookies(ckey = ckey)
 # Set rest of cookies (server returns the rest of the cookies when you request
 # the page with a ckey). Still need to use ckey_cookie in future requests,
 # though.
-GET(url = "http://nb.mit.edu", ua, ckey_cookie)
+invisible(GET(url = "http://nb.mit.edu", ua, ckey_cookie))
  
 # Get ids for nota bene assignments
 nota_bene_assigs <- POST(url = paste("http://nb.mit.edu/pdf4/rpc?guest=1&ckey=", ckey, sep = ""),
@@ -67,7 +92,8 @@ print(class_ids)
 
 class_id_is_valid <- function(class_id) ! is.null(nb_assig_data$payload$ensembles[[as.character(class_id)]])
 repeat {
-    class_id <- as.numeric(readline("Enter the id of the class: "))
+    cat("Enter the id of the class (Ctrl + D to quit): ")
+    class_id <- as.numeric(readLines(STDIN, 1))
     if (class_id_is_valid(class_id)) break
     # Give error message for invalid ids:
     cat("Invalid Class ID entered. Please try again.\n")
@@ -79,13 +105,28 @@ print(titles_ids)
 
 nb_id_is_valid <- function(nb_id) ! is.null(nb_assig_data$payload$files[[as.character(nb_id)]])
 repeat {
-    nb_id <- as.numeric(readline("Enter the id of the Nota Bene you wish to retrieve: "))
+    cat("Enter the id of the Nota Bene you wish to retrieve (Ctrl + D to quit): ")
+    nb_id <- as.numeric(readLines(STDIN, 1))
     if (nb_id_is_valid(nb_id)) break
     # Give error message for invalid ids:
     cat("Invalid ID entered. Please try again.\n")
 }
-############# To here ##############################################################
-#### Input the number that corresponds to the intended assignment #################
+
+# Needed for Smartsite-friendly output
+cat("Enter the assignment number (1 - 10): ")
+assign_num <- as.numeric(readLines(STDIN, 1))
+
+# Get the due date for the retrieved nota bene (assuming the displayed time
+# is written in Pacific Time). Convert to UTC because comment submission times
+# are stored in UTC. Store as Pacific Time (no tz defaults to local time) even
+# though it's actually UTC so less code has to be written later.
+due_date <- as.POSIXct(
+    format(
+        as.POSIXct(nb_assig_data$payload$files[[as.character(nb_id)]]$due,
+        format = "%FT%T",
+        tz = "America/Los_Angeles"),
+     tz = "UTC")
+)
 
 # Should be exactly the same as the class id entered above
 ensemble_id <- as.numeric(nb_assig_data$payload$files[[as.character(nb_id)]]$id_ensemble)
@@ -120,116 +161,160 @@ get_data <- function(comment) {
 data <- t(sapply(nb_data$payload$comments, get_data))
 rownames(data) <- data[,3]
 colnames(data) <- c("First Name", "Last Name", "Email", "Time", "Comment")
-####Associated Files Required
-rost <- read.xlsx(roster, 1)
 
-# Output data to OUT_FILE. Fields are quoted, so text-delimeter when importing
-# is: "
-# write.table(data, '/Users/jeffreymiller/Desktop/NB_OUT_FILE', sep="\t", quote=TRUE, row.names=FALSE)
+################################################################################
+#                               Score Calculation                              #
+################################################################################
 
-############### End Erics Program ##########################################################
-############# Data contains the time that comments were made #############################
+cat("Calculating scores...\n")
 
 #set workfile name from assignment name
+nb_file <- nb_assig_data$payload$files[[as.character(nb_id)]]$title
 outfilename <- substr(basename(nb_file), 1, nchar(basename(nb_file)) - 4)
 
 ###Split out worksheet into in objects
-wordc <- read.xlsx(file, 1)
-charc <- read.xlsx(file, 2)
-comc <- read.xlsx(file, 3)
 rost <- read.xlsx(roster, 1)
 
-###Create new dataframe for data
-data1 <- data.frame(Email.Address=comc[[1]], score=0, com=comc[[nb_file]])
-#names(data1)[names(data1)=='email']<-'Email.Address'
+# As of 3/3/16, on the Nota Bene website, the character count, comment count,
+# and word count statistics for the XLS file (when one clicks Download as XLS)
+# are calculated within a database query. See Line 312 in
+# github:nbproject/nbproject/apps/base/annotations.py in commit c6bb13a (Jan 10,
+# 2016) for the relevant query.
+# URL: https://github.com/nbproject/nbproject/blob/c6bb13ae30d992d03d9fb4ecad75e91af5208df4/apps/base/annotations.py#L312
+#
+# Comment count is calculated using: count(v.id)
+# Word count is calculated using whitespace: sum(array_length(regexp_split_to_array(c.body, E'\\\\s+'), 1))
+# Character count is calculated using: sum(length(c.body))
+#
+# These data can easily be reproduced in R from the JSON data:
 
-###Zero NA in the data
-comc[is.na(comc)]<-0
-wordc[is.na(wordc)]<-0
-charc[is.na(charc)]<-0
-data1[is.na(data1)]<-0
-#tem[is.na(tem)]<-0
+# Calculates word count for each comment
+count_words <- function(comment) {
+   sum(attr(gregexpr("\\s+", comment)[[1]], "match.length")) + 1
+}
 
-####Evaluate and assign score ###CHANGE VALUES HERE
-sel<-(comc[[nb_file]]>=4 & wordc[[nb_file]]>=35)
-data1[[2]][sel]<-with(comc[sel,], 5)###sets the above critera to be worth 5 points
-sel<-(comc[[nb_file]]>=3 & wordc[[nb_file]]<35)
-data1[[2]][sel]<-with(comc[sel,], 3)
-sel<-(comc[[nb_file]]==2 & wordc[[nb_file]]>=20) & (comc[[nb_file]]==2 & wordc[[nb_file]]<400)
-data1[[2]][sel]<-with(comc[sel,], 3)
-sel<-(comc[[nb_file]]==2 & wordc[[nb_file]]<20)
-data1[[2]][sel]<-with(comc[sel,], 2)
-sel<-(comc[[nb_file]]==1 & wordc[[nb_file]]<=400)
-data1[[2]][sel]<-with(comc[sel,], 1)
+# Calculates character count for each comment
+count_characters <- function(comment) {
+    nchar(comment)
+}
 
+# Convenience function to string the word count and character count into a list
+count_words_and_characters <- function(comment) {
+    c(count_words(comment), count_characters(comment))
+}
 
-####Write New Workbook for sorting and spot checks
-output1 <- createWorkbook()
-sheet <- createSheet(output1, sheetName="results")
-addDataFrame(data1, sheet)
-saveWorkbook(output1, paste("NB_", assign_num, "_", outfilename, "_processed_45_25_", instruct, ".xlsx", sep=""))
+# Returns (1, 1) for on time comments and (0, 1) for late comments or something
+# in between when partial credit is allowed. The lists can be summed up later to
+# obtain, for each student, the amount of credit given for each comment and the
+# total number of comments
+on_time_credit <- function(x) {
+    comment_date <- as.POSIXct(x, format='%FT%T')
+    # When summed, becomes
+                # On.Time                        Total.Comments
+    if (GRADE_MODE <= 0) {
+        c(ifelse(comment_date < due_date, 1, 0), 1)
+    }
+    else {
+        c(partial_credit_func(comment_date, due_date), 1)
+    }
+}
 
-####Counting the flags
-length(which(data1[[2]]==2 & data1[[3]]==2))
-length(which(data1[[2]]==1 & data1[[3]]<=2))
+# Sets word/character counts for each comment to 0 (or a fraction of the count)
+# if the comment was not on time so that the comment's word/character counts are
+# not included in the student's sum.
+modify_late <- function(word_character_counts, on_time_data) {
+    # Set to 0 if late at all
+    # word_character_counts * floor(on_time_data[,1])
+    # Set to a fraction if only a little late; 0 otherwise
+    cbind(word_character_counts, word_character_counts * on_time_data[,1])
+}
 
-####Write new notebook for uploading assignment to smartsite
-####No-structure gradebook (only grades). Grade and student data. Use this approach if you have already set up your gradebook and you want to add scores/comments for new grade items, or you want to add or overwrite  scores/comments for existing items.
+# Used to evaluate each comment for degree of lateness and applies partial
+# credit accordingly
+partial_credit_func <- function(date, due_date) {
+    # Give full credit if the comment is not late at all
+    minutes_late <- as.double(date - due_date, units = "mins")
+    if (minutes_late <= 0) {
+        return(1)
+    }
 
-##merge scores with roster via email address
-mg <- data.frame(merge(data1, rost, "Email.Address"), ontime = 0) ## contains email and stu id
-
-# Returns 1 if student's comment is on time; 0 otherwise. We'll sum up the 1's
-# later to obtain the total number of on-time comments.
-due.date <- '2016-02-29 18:00:00'
-is_on_time <- function(x) {
-  # When summed, becomes:
-  # On.Time                                                                        Total.Comments
-  c(ifelse(as.POSIXct(strtrim(x,19),format='%FT%T') < as.POSIXct(due.date), 1, 0), 1)
+    # Apply partial credit as a fraction according to the partial credit
+    # function if the comment is late. Don't give negative credit.
+    percentage <- PARTIAL_CREDIT(minutes_late)
+    ifelse(percentage < 0, 0, percentage)
 }
 
 # Figure out which comments are on time and sum the number of on-time comments
-# (this part: sapply(FUN = is_on_time, data[, 'Time']))
+# (this part: sapply(FUN = on_time_credit, data[, 'Time']))
 # for each e-mail address
 # (the outer part: aggregate by list(data[, 'Email']) using sum)
-on_time_count <- aggregate(
-    t(sapply(FUN = is_on_time, data[, 'Time'])),
-    by = list(data[, 'Email']),
-    FUN = sum)
+on_time_counts <- t(sapply(FUN = on_time_credit, data[, 'Time']))
+on_time_count <- aggregate(on_time_counts,
+    by = list(data[, 'Email']), FUN = sum)
+
+# Sum word counts and character counts for each e-mail address
+individual_comment_statistics <- t(sapply(data[, "Comment"],
+    FUN = count_words_and_characters))
+comment_statistics <- aggregate(
+    modify_late(individual_comment_statistics, on_time_counts),
+    by = list(data[, "Email"]), FUN = sum)
+
+# Clarify what output columns are for comment statistics
+names(comment_statistics) <- c("Email.Address", "Orig.Word", "Orig.Char", "Word.Count", "Character.Count")
+
+# Round off number of comments so something like 3.99 comments (due to partial
+# credit calculation / being less than a minute late) doesn't lose points.
+on_time_count <- cbind(on_time_count, round(on_time_count[,2]))
+
+# Reorder columns so they're in a more logical order
+on_time_count <- on_time_count[, c(1, 2, 4, 3)]
 
 # Clarify what output columns are
-names(on_time_count) <- c("Email.Address", "On.Time", "Total.Comments")
+names(on_time_count) <- c("Email.Address", "Time.Partial.Cred.Frac", "On.Time", "Total.Comments")
+
+# Merge the two statistics data.frames
+stats <- data.frame(merge(comment_statistics, on_time_count, by = "Email.Address"), Score = 0)
+
+####Evaluate and assign score ###CHANGE VALUES HERE
+
+# Students with at least 4 comments and a total of 35 words across the 4
+# comments get 5 points
+sel <- (stats$On.Time >= 4 & stats$Word.Count >= 35)
+stats$Score[sel] <- 5
+sel <- (stats$On.Time >= 3 & stats$Word.Count < 35)
+stats$Score[sel] <- 3
+sel <- (stats$On.Time == 2 & stats$Word.Count >= 20) & (stats$On.Time == 2 & stats$Word.Count < 400)
+stats$Score[sel] <- 3
+sel <- (stats$On.Time == 2 & stats$Word.Count < 20)
+stats$Score[sel] <- 2
+sel <- (stats$On.Time == 1 & stats$Word.Count <= 400)
+stats$Score[sel] <- 1
+
+##merge scores with roster via email address
+mg <- merge(rost, stats, "Email.Address", all.x = TRUE) ## contains email and stu id
 
 # Modify grades based on whether or not comments were on time
-#
-# First, copy the on_time_count table into the mg table. mg$On.Time.Comments
-# will have the number of on-time comments from each student after this
-# procedure
-mg <- merge(mg, on_time_count, by = "Email.Address", all.x = TRUE)
-
 # Replace NAs from merge with 0s (or we'll get a can't divide error later)
-mg$On.Time[is.na(mg$On.Time)] <- 0
-mg$Total.Comments[is.na(mg$Total.Comments)] <- 0
+mg[is.na(mg)] <- 0
 
-# Use a maximum of 4 on-time comments (that way, if a student gave 11 on-time
-# comments, they don't get extra credit)
-mg$On.Time[mg$On.Time > 4] <- 4
+# Write New Workbook for sorting and spot checks (contains all data used for
+# grading and then some)
+output1 <- createWorkbook()
+sheet <- createSheet(output1, sheetName="results")
+addDataFrame(mg, sheet)
+saveWorkbook(output1, paste(outfilename, "_processed_45_25_", instruct, ".xlsx", sep=""))
 
-# Can't divide by 0, so make each Total.Comments at least 1, but no greater than 4
-mg$Total.Comments[mg$Total.Comments < 1] <- 1
-mg$Total.Comments[mg$Total.Comments > 4] <- 4
-
-# Apply partial credit linearly (1 comment = 25% of grade, 2 = 50% of grade, 3 =
-# 75% of grade, 4+ = 100% of grade); modify as necessary.
-mg$score <- mg$score * (mg$On.Time / mg$Total.Comments)
+####Write new notebook for uploading assignment to smartsite
+# No-structure gradebook (only grades). Grade and student data. Use this
+# approach if you have already set up your gradebook and you want to add
+# scores/comments for new grade items, or you want to add or overwrite
+# scores/comments for existing items.
 
 ###Create New Data Frame For Output
-data2 <- data.frame(Student.Id=mg[[5]], New.Item=mg[[2]])
+data2 <- data.frame(Student.Id=mg$User.ID, New.Item=mg$Score)
 
 #Rename Columns to SmartSite-Friendly Format
-names(data2)[names(data2)=='Student.Id']<-'Student Id'
-#names(data2)[names(data2)=='Student.Name']<-'Student Name'
-names(data2)[names(data2)=='New.Item']<-paste(paste('NB',assign_num,sep=''),'[5]') 
+names(data2) = c("Student Id", paste("NB", assign_num, "[5]", sep=""))
 
 ####Write new file
 output2 <- createWorkbook()
@@ -238,10 +323,4 @@ addDataFrame(data2, sheet, row.names=FALSE)
 saveWorkbook(output2, paste(outfilename, "_processed_45_25_", instruct, "_upload.xlsx", sep=""))
 ###
 ##### Import the above file into smartsite. Appears in the working directory (NB folder) ###
-
-
-
-
-
-
 
