@@ -245,10 +245,10 @@ partial_credit_func <- function(date, due_date) {
 }
 
 # Figure out which comments are on time and sum the number of on-time comments
-# (this part: sapply(FUN = is_on_time, data[, 'Time']))
+# (this part: sapply(FUN = on_time_credit, data[, 'Time']))
 # for each e-mail address
 # (the outer part: aggregate by list(data[, 'Email']) using sum)
-on_time_counts <- t(sapply(FUN = is_on_time, data[, 'Time']))
+on_time_counts <- t(sapply(FUN = on_time_credit, data[, 'Time']))
 on_time_count <- aggregate(on_time_counts,
     by = list(data[, 'Email']), FUN = sum)
 
@@ -259,9 +259,18 @@ comment_statistics <- aggregate(
     modify_late(individual_comment_statistics, on_time_counts),
     by = list(data[, "Email"]), FUN = sum)
 
-# Clarify what output columns are
+# Clarify what output columns are for comment statistics
 names(comment_statistics) <- c("Email.Address", "Orig.Word", "Orig.Char", "Word.Count", "Character.Count")
-names(on_time_count) <- c("Email.Address", "On.Time", "Total.Comments")
+
+# Round off number of comments so something like 3.99 comments (due to partial
+# credit calculation / being less than a minute late) doesn't lose points.
+on_time_count <- cbind(on_time_count, round(on_time_count[,2]))
+
+# Reorder columns so they're in a more logical order
+on_time_count <- on_time_count[, c(1, 2, 4, 3)]
+
+# Clarify what output columns are
+names(on_time_count) <- c("Email.Address", "Time.Partial.Cred.Frac", "On.Time", "Total.Comments")
 
 # Merge the two statistics data.frames
 stats <- data.frame(merge(comment_statistics, on_time_count, by = "Email.Address"), Score = 0)
