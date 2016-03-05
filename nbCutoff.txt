@@ -226,7 +226,7 @@ modify_late <- function(word_character_counts, on_time_data) {
     # Set to 0 if late at all
     # word_character_counts * floor(on_time_data[,1])
     # Set to a fraction if only a little late; 0 otherwise
-    word_character_counts * on_time_data[,1]
+    cbind(word_character_counts, word_character_counts * on_time_data[,1])
 }
 
 # Used to evaluate each comment for degree of lateness and applies partial
@@ -260,7 +260,7 @@ comment_statistics <- aggregate(
     by = list(data[, "Email"]), FUN = sum)
 
 # Clarify what output columns are
-names(comment_statistics) <- c("Email.Address", "Word.Count", "Character.Count")
+names(comment_statistics) <- c("Email.Address", "Orig.Word", "Orig.Char", "Word.Count", "Character.Count")
 names(on_time_count) <- c("Email.Address", "On.Time", "Total.Comments")
 
 # Merge the two statistics data.frames
@@ -286,11 +286,7 @@ mg <- merge(rost, stats, "Email.Address", all.x = TRUE) ## contains email and st
 
 # Modify grades based on whether or not comments were on time
 # Replace NAs from merge with 0s (or we'll get a can't divide error later)
-mg$On.Time[is.na(mg$On.Time)] <- 0
-mg$Total.Comments[is.na(mg$Total.Comments)] <- 0
-mg$Word.Count[is.na(mg$Word.Count)] <- 0
-mg$Character.Count[is.na(mg$Character.Count)] <- 0
-mg$Score[is.na(mg$Score)] <- 0
+mg[is.na(mg)] <- 0
 
 # Write New Workbook for sorting and spot checks (contains all data used for
 # grading and then some)
