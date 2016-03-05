@@ -4,6 +4,11 @@ suppressPackageStartupMessages(library(xlsx))
 #install.packages('httr')
 library(httr)
 
+################################################################################
+#                              User Settings                                   #
+################################################################################
+
+
 ##Download the latest roster and put the path to this file
 roster <- "BIS_002A_A01_A17_WQ_2016_2_10_16.xls"
 
@@ -13,16 +18,43 @@ roster <- "BIS_002A_A01_A17_WQ_2016_2_10_16.xls"
 
 ## Change only once
 instruct <- "Kopp"
+
 # Put login info for Nota Bene here:
 EMAIL <- ""
 PASSWORD <- ""
+
+# Grading mode (choice of 0: No credit if late, 1: Partial credit if late 1
+# minute or less, 2: Partial credit if late 2 minutes or less, etc.)
+#
+# Partial credit is applied using the function:
+# f(x) = (-e^((2/a)*e*x-(2*e-ln(5)))+5)/5
+# where e is the constant, x is minutes after due date, and a is minutes past
+# the due date after which no partial credit is applied. f(x) is the percentage
+# of full comment credit given to a comment expressed as a decimal.
+GRADE_MODE <- 0
+
+PARTIAL_CREDIT <- function(x) {
+    (-exp((2/GRADE_MODE) * exp(1) * x - (2 * exp(1) - log(5))) + 5) / 5
+}
+
+
+# Don't need to change anything below this line ################################
+
+################################################################################
+#                                Data Retrieval                                #
+################################################################################
 
 STDIN <- file("stdin")
 
 # Set User Agent string so it doesn't look like we're scraping data with R.
 # Change to something else (e.g., Chrome) if desired. Should have no effect
 # on anything.
-ua <- add_headers("User-Agent" = "Mozilla/5.0 (X11; Linux x86_64; rv:43.0) Gecko/20100101 Firefox/43.0")
+# Firefox 44.0 on Linux
+ua <- add_headers("User-Agent" = "Mozilla/5.0 (X11; Linux x86_64; rv:44.0) Gecko/20100101 Firefox/44.0")
+# Chrome 45.0 on Windows 10
+# ua <- add_headers("User-Agent" = "Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/45.0.2454.93 Safari/537.36")
+# Safari 601.1.56 on OS X
+# ua <- add_headers("User-Agent" = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_11) AppleWebKit/601.1.56 (KHTML, like Gecko) Version/9.0 Safari/601.1.56")
 
 # Get ckey for all subsequent requests.
 l <- POST(url = "http://nb.mit.edu/pdf4/rpc?guest=1",
@@ -130,6 +162,10 @@ colnames(data) <- c("First Name", "Last Name", "Email", "Time", "Comment")
 cat("Enter the assignment number (1 - 10): ")
 assign_num <- as.numeric(readLines(STDIN, 1))
 
+################################################################################
+#                               Score Calculation                              #
+################################################################################
+
 cat("Calculating scores...\n")
 
 #set workfile name from assignment name
@@ -167,29 +203,61 @@ count_words_and_characters <- function(comment) {
     c(count_words(comment), count_characters(comment))
 }
 
-# Returns (1, 1) for on time comments and (0, 1) for late comments. The lists
-# can be summed up later to obtain, for each student, the total number of on
-# time comments and the total number of comments
-is_on_time <- function(x) {
-  # When summed, becomes
-  # On.Time                                                 Total.Comments
-  c(ifelse(as.POSIXct(x, format='%FT%T') < due_date, 1, 0), 1)
+# Returns (1, 1) for on time comments and (0, 1) for late comments or something
+# in between when partial credit is allowed. The lists can be summed up later to
+# obtain, for each student, the amount of credit given for each comment and the
+# total number of comments
+on_time_credit <- function(x) {
+    comment_date <- as.POSIXct(x, format='%FT%T')
+    # When summed, becomes
+                # On.Time                        Total.Comments
+    if (GRADE_MODE <= 0) {
+        c(ifelse(comment_date < due_date, 1, 0), 1)
+    }
+    else {
+        c(partial_credit_func(comment_date, due_date), 1)
+    }
+}
+
+# Sets word/character counts for each comment to 0 (or a fraction of the count)
+# if the comment was not on time so that the comment's word/character counts are
+# not included in the student's sum.
+modify_late <- function(word_character_counts, on_time_data) {
+    # Set to 0 if late at all
+    # word_character_counts * floor(on_time_data[,1])
+    # Set to a fraction if only a little late; 0 otherwise
+    word_character_counts * on_time_data[,1]
+}
+
+# Used to evaluate each comment for degree of lateness and applies partial
+# credit accordingly
+partial_credit_func <- function(date, due_date) {
+    # Give full credit if the comment is not late at all
+    minutes_late <- as.double(date - due_date, units = "mins")
+    if (minutes_late <= 0) {
+        return(1)
+    }
+
+    # Apply partial credit as a fraction according to the partial credit
+    # function if the comment is late. Don't give negative credit.
+    percentage <- PARTIAL_CREDIT(minutes_late)
+    ifelse(percentage < 0, 0, percentage)
 }
 
 # Figure out which comments are on time and sum the number of on-time comments
 # (this part: sapply(FUN = is_on_time, data[, 'Time']))
 # for each e-mail address
 # (the outer part: aggregate by list(data[, 'Email']) using sum)
-on_time_count <- aggregate(
-    t(sapply(FUN = is_on_time, data[, 'Time'])),
-    by = list(data[, 'Email']),
-    FUN = sum)
+on_time_counts <- t(sapply(FUN = is_on_time, data[, 'Time']))
+on_time_count <- aggregate(on_time_counts,
+    by = list(data[, 'Email']), FUN = sum)
 
 # Sum word counts and character counts for each e-mail address
+individual_comment_statistics <- t(sapply(data[, "Comment"],
+    FUN = count_words_and_characters))
 comment_statistics <- aggregate(
-    t(sapply(data[, "Comment"], FUN = count_words_and_characters)),
-    by = list(data[, "Email"]),
-    FUN = sum)
+    modify_late(individual_comment_statistics, on_time_counts),
+    by = list(data[, "Email"]), FUN = sum)
 
 # Clarify what output columns are
 names(comment_statistics) <- c("Email.Address", "Word.Count", "Character.Count")
@@ -202,15 +270,15 @@ stats <- data.frame(merge(comment_statistics, on_time_count, by = "Email.Address
 
 # Students with at least 4 comments and a total of 35 words across the 4
 # comments get 5 points
-sel <- (stats$Total.Comments >= 4 & stats$Word.Count >= 35)
+sel <- (stats$On.Time >= 4 & stats$Word.Count >= 35)
 stats$Score[sel] <- 5
-sel <- (stats$Total.Comments >= 3 & stats$Word.Count < 35)
+sel <- (stats$On.Time >= 3 & stats$Word.Count < 35)
 stats$Score[sel] <- 3
-sel <- (stats$Total.Comments == 2 & stats$Word.Count >= 20) & (stats$Total.Comments == 2 & stats$Word.Count < 400)
+sel <- (stats$On.Time == 2 & stats$Word.Count >= 20) & (stats$On.Time == 2 & stats$Word.Count < 400)
 stats$Score[sel] <- 3
-sel <- (stats$Total.Comments == 2 & stats$Word.Count < 20)
+sel <- (stats$On.Time == 2 & stats$Word.Count < 20)
 stats$Score[sel] <- 2
-sel <- (stats$Total.Comments == 1 & stats$Word.Count <= 400)
+sel <- (stats$On.Time == 1 & stats$Word.Count <= 400)
 stats$Score[sel] <- 1
 
 ##merge scores with roster via email address
@@ -223,18 +291,6 @@ mg$Total.Comments[is.na(mg$Total.Comments)] <- 0
 mg$Word.Count[is.na(mg$Word.Count)] <- 0
 mg$Character.Count[is.na(mg$Character.Count)] <- 0
 mg$Score[is.na(mg$Score)] <- 0
-
-# Use a maximum of 4 on-time comments (that way, if a student gave 11 on-time
-# comments, they don't get extra credit)
-mg$On.Time[mg$On.Time > 4] <- 4
-
-# Can't divide by 0, so make each Total.Comments at least 1, but no greater than 4
-mg$Total.Comments[mg$Total.Comments < 1] <- 1
-mg$Total.Comments[mg$Total.Comments > 4] <- 4
-
-# Apply partial credit linearly (1 comment = 25% of grade, 2 = 50% of grade, 3 =
-# 75% of grade, 4+ = 100% of grade); modify as necessary.
-mg$Score <- mg$Score * (mg$On.Time / mg$Total.Comments)
 
 # Write New Workbook for sorting and spot checks (contains all data used for
 # grading and then some)
