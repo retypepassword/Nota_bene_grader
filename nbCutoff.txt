@@ -293,15 +293,31 @@ stats$Score[sel] <- 1
 ##merge scores with roster via email address
 mg <- merge(rost, stats, "Email.Address", all.x = TRUE) ## contains email and stu id
 
-# Modify grades based on whether or not comments were on time
-# Replace NAs from merge with 0s (or we'll get a can't divide error later)
+# Replace NAs from merge with 0s (looks nicer)
 mg[is.na(mg)] <- 0
+
+# Find duplicate student ids and remove the one(s) with the lower score (if
+# there are duplicates and if there's one with a lower score)
+duplicates <- mg[mg$User.ID %in% mg$User.ID[duplicated(mg$User.ID)], ]
+
+# Get highest score of duplicates
+dupScores <- duplicates[order(duplicates$Score, decreasing=TRUE), ]
+highDupScores <- dupScores[unique(match(duplicates$User.ID, dupScores$User.ID)),]
+lowDupScores <- dupScores[!rownames(dupScores) %in% rownames(highDupScores),]
 
 # Write New Workbook for sorting and spot checks (contains all data used for
 # grading and then some)
 output1 <- createWorkbook()
 sheet <- createSheet(output1, sheetName="results")
 addDataFrame(mg, sheet)
+
+# Highlight deleted (anything with something other than the highest score)
+# duplicate student id rows in sort sheet
+dupRows <- as.numeric(rownames(lowDupScores))
+highlight <- CellStyle(output1) + Fill(backgroundColor = "red1")
+invisible(lapply(getCells(getRows(sheet, rowIndex = dupRows + 1)),
+    FUN = function(x) { setCellStyle(x, highlight) }))
+
 saveWorkbook(output1, paste(outfilename, "_processed_45_25_", instruct, ".xlsx", sep=""))
 
 ####Write new notebook for uploading assignment to smartsite
@@ -312,6 +328,9 @@ saveWorkbook(output1, paste(outfilename, "_processed_45_25_", instruct, ".xlsx",
 
 ###Create New Data Frame For Output
 data2 <- data.frame(Student.Id=mg$User.ID, New.Item=mg$Score)
+
+# Filter out low-score duplicates
+data2 <- data2[!rownames(data2) %in% rownames(lowDupScores), ]
 
 #Rename Columns to SmartSite-Friendly Format
 names(data2) = c("Student Id", paste("NB", assign_num, "[5]", sep=""))
