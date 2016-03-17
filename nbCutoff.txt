@@ -48,17 +48,26 @@ PARTIAL_CREDIT <- function(x) {
 ################################################################################
 
 # Lifted from http://stackoverflow.com/a/15373917
-usingRScript <- function() {
+rScriptParms <- function() {
     cmdArgs <- commandArgs(trailingOnly = FALSE)
     needle <- "--file="
     match <- grep(needle, cmdArgs)
-    length(match) > 0
+    list(cmdArgs = cmdArgs, needle = needle, match = match)
+}
+
+usingRScript <- function(rsParms) {
+    if (missing(rsParms)) {
+        rsParms <- rScriptParms()
+    }
+    length(rsParms$match > 0)
 }
 
 thisFile <- function() {
-    if (usingRScript()) {
+    rsParms <- rScriptParms()
+
+    if (usingRScript(rsParms)) {
         # Rscript
-        normalizePath(sub(needle, "", cmdArgs[match]))
+        normalizePath(sub(rsParms$needle, "", rsParms$cmdArgs[rsParms$match]))
     }
     else {
         # source'd
