@@ -210,10 +210,22 @@ nb_data <- content(nota_bene, type = "application/json")
 cat("Keep waiting...\n")
 
 # Get just the full name, email, creation time, and comments
+# Get just the full name, email, creation time, and comments
 get_data <- function(comment) {
     student_info <- student_data$payload[[as.character(comment$id_author)]]
-    c(student_info$firstname, student_info$lastname, student_info$email, comment$ctime, comment$body)
+    if (is.null(student_info)) {
+        c(gsub(" [^ ]+$\\s*", "", comment$fullname), gsub("^[^ ]+\\s*", "", comment$fullname), NA, comment$ctime, cleanHTML(comment$body))
+    }
+    else {
+        c(student_info$firstname, student_info$lastname, student_info$email, comment$ctime, cleanHTML(comment$body))
+    }
 }
+
+# Clean up HTML tags
+cleanHTML <- function(comment_body) {
+    gsub("<.*?>", "", comment_body)
+}
+
 data <- t(sapply(nb_data$payload$comments, get_data))
 rownames(data) <- data[,3]
 colnames(data) <- c("First Name", "Last Name", "Email", "Time", "Comment")
