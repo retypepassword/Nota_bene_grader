@@ -17,10 +17,10 @@ library(httr)
 # roster in folder specified above (or the same folder as the R script if no
 # folder is specified), you can just put the filename.
 # Otherwise, you'll need the whole path:
-roster <- "BIS_002A_A01_A17_WQ_2016_2_10_16.xls"
+roster <- "BIS_002A_B01_B29_WQ_2017_1_26_17.xls"
 
 ### Change only once
-instruct <- "Kopp"
+instruct <- "Facciotti"
 
 ### Put login info for Nota Bene here:
 EMAIL <- ""
@@ -40,6 +40,39 @@ PARTIAL_CREDIT <- function(x) {
     (-exp((2/GRADE_MODE) * exp(1) * x - (2 * exp(1) - log(5))) + 5) / 5
 }
 
+# Don't count comments with fewer than:
+MIN_WORDS <- 0 # words (to prevent comments like "a" to make it seem like there are five comments) and an average of
+AVG_CHARS_PER <- 0 # characters per word (to prevent comments like "a a a a a" to get around the word limit)
+WORDS_NOT_BE_SAME_LENGTH <- TRUE # make sure the words are different words (to prevent comments like "something
+                              # something something something something" to get around the word limit and
+                              # character average limit)
+
+score <- function(stats) {
+    # Replace Comment.Credit.Word.Count and Credited.On.Time with the more
+    # readable Word.Count and On.Time, respectively.
+    names(stats) <- replace(names(stats), c(8, 14), c('Word.Count', 'On.Time'))
+
+####Evaluate and assign score ###CHANGE VALUES HERE
+    # Students with at least 4 sufficiently-long comments (or at least 10 short
+    # comments) and a total of at least 35 words across the 4 comments get 5 points
+    sel <- (stats$On.Time >= 4 & stats$Word.Count >= 35)
+    stats$Score[sel & stats$Score < 0] <- 5
+    sel <- (stats$On.Time >= 3 & stats$Word.Count >= 35)
+    stats$Score[sel & stats$Score < 0] <- 4
+    sel <- (stats$On.Time >= 3 & stats$Word.Count >= 25)
+    stats$Score[sel & stats$Score < 0] <- 3
+    sel <- (stats$On.Time >= 2 & stats$Word.Count >= 18)
+    stats$Score[sel & stats$Score < 0] <- 2
+    sel <- (stats$On.Time >= 1 & stats$Word.Count >= 9)
+    stats$Score[sel & stats$Score < 0] <- 1
+    # Students who didn't answer at all or had fewer than 9 words in their answers
+    stats$Score[stats$Score < 0] <- 0
+
+    # Undo name changes made in beginning of function
+    names(stats) <- replace(names(stats), c(8, 14), c('Comment.Credit.Word.Count', 'Credited.On.Time'))
+
+    stats
+}
 
 # Don't need to change anything below this line ################################
 
@@ -258,7 +291,22 @@ rost <- read.xlsx(roster, 1)
 
 # Calculates word count for each comment
 count_words <- function(comment) {
-   sum(attr(gregexpr("\\s+", comment)[[1]], "match.length")) + 1
+    individual_word_counts <- 0
+    word_count_list <- sapply(strsplit(comment, "\\s+"), FUN = nchar)
+
+    if (length(word_count_list) > 1)
+        individual_word_counts <- sapply(strsplit(comment, "\\s+"), FUN = nchar)[,1]
+
+    # Count number of words with the same length as the first word
+    same_length_words <- sum(individual_word_counts == individual_word_counts[1])
+
+    total_word_count <- sum(attr(gregexpr("\\s+", comment)[[1]], "match.length")) + 1
+
+    # if same_length_words is equal to the total word count, there be trouble.
+    if (WORDS_NOT_BE_SAME_LENGTH && same_length_words == total_word_count) {
+       return(c(0, total_word_count))
+    }
+    c(total_word_count, total_word_count)
 }
 
 # Calculates character count for each comment
@@ -268,7 +316,16 @@ count_characters <- function(comment) {
 
 # Convenience function to string the word count and character count into a list
 count_words_and_characters <- function(comment) {
-    c(count_words(comment), count_characters(comment))
+    counted <- count_words(comment)
+    total_words <- counted[2]
+    words <- counted[1]
+    credited_words <- words
+    characters <- count_characters(comment)
+    
+    if (words < MIN_WORDS) credited_words <- 0
+    if (words == 0 || (characters / words) < AVG_CHARS_PER) credited_words <- 0
+
+    c(total_words, words, credited_words, characters)
 }
 
 # Returns (1, 1) for on time comments and (0, 1) for late comments or something
@@ -297,6 +354,17 @@ modify_late <- function(word_character_counts, on_time_data) {
     cbind(word_character_counts, word_character_counts * on_time_data[,1])
 }
 
+# Sets a comment to 0 (instead of 1) if it doesn't have the sufficient number of
+# words (i.e., the comment essentially doesn't count if there aren't enough
+# words). Uses the credited_words column from word_character_counts
+modify_min <- function(word_character_counts, comment_count) {
+    sufficiently_long_comment_count <- comment_count[,1]
+    sufficiently_long_comment_count[word_character_counts[,3] == 0] <- 0
+    # When summed, becomes
+          # Credited                       # On.Time, Total.Comments
+    cbind(sufficiently_long_comment_count, comment_count)
+}
+
 # Used to evaluate each comment for degree of lateness and applies partial
 # credit accordingly
 partial_credit_func <- function(date, due_date) {
@@ -317,50 +385,70 @@ partial_credit_func <- function(date, due_date) {
 # for each e-mail address
 # (the outer part: aggregate by list(data[, 'Email']) using sum)
 on_time_counts <- t(sapply(FUN = on_time_credit, data[, 'Time']))
-on_time_count <- aggregate(on_time_counts,
-    by = list(data[, 'Email']), FUN = sum)
 
 # Sum word counts and character counts for each e-mail address
 individual_comment_statistics <- t(sapply(data[, "Comment"],
     FUN = count_words_and_characters))
+
 comment_statistics <- aggregate(
     modify_late(individual_comment_statistics, on_time_counts),
     by = list(data[, "Email"]), FUN = sum)
 
-# Clarify what output columns are for comment statistics
-names(comment_statistics) <- c("Email.Address", "Orig.Word", "Orig.Char", "Word.Count", "Character.Count")
+on_time_and_long_enough_count <- modify_min(individual_comment_statistics, on_time_counts)
+
+# Number of on-time comments
+on_time_count <- aggregate(on_time_and_long_enough_count,
+    by = list(data[, 'Email']), FUN = sum)
+
+# Clarify what output columns are for word statistics
+# * Orig.Total.Words and Total.Word.Count
+#   is the total number of words in the original comment, before applying any
+#   workaround prevention measures.
+# * Orig.Credited.Words and Credited.Word.Count
+#   is 0 if all the words in the comment are the same length and equal to
+#   Orig.Total.Words if they're not.
+# * Orig.Comment.Credited.Words and Comment.Credit.Word.Count
+#   is 0 if there are insufficient numbers of words in the comment or equal to
+#   Orig.Credited.Words if not.
+# * Orig.Char and Character.Count
+#   is the total number of characters in the comment
+# The second set of 4 columns is the same as the first set of 4 columns, but
+# after being multiplied by 1 or 0, depending on whether or not the comment was
+# on time.
+names(comment_statistics) <- c("Email.Address", "Orig.Total.Words", "Orig.Credited.Words", "Orig.Comment.Credited.Words", "Orig.Char", "Total.Word.Count", "Credited.Word.Count", "Comment.Credit.Word.Count", "Character.Count")
 
 # Round off number of comments so something like 3.99 comments (due to partial
 # credit calculation / being less than a minute late) doesn't lose points.
-on_time_count <- cbind(on_time_count, round(on_time_count[,2]))
+on_time_count <- cbind(on_time_count, round(on_time_count[,3]), round(on_time_count[,2]))
 
 # Reorder columns so they're in a more logical order
-on_time_count <- on_time_count[, c(1, 2, 4, 3)]
+on_time_count <- on_time_count[, c(1, 4, 3, 2, 5, 6)]
 
-# Clarify what output columns are
-names(on_time_count) <- c("Email.Address", "Time.Partial.Cred.Frac", "On.Time", "Total.Comments")
+# Clarify what output columns are for comment statistics
+# * Partial.Cred.Frac
+#   is the total number of comments that were submitted on time, plus fractional
+#   credit given for comments that were submitted late. If GRADE_MODE is 0, this
+#   should always be the same as On.Time.Count.
+# * Credited.Partial.Cred.Frac
+#   is the total number of comments in Partial.Cred.Frac that were sufficiently
+#   long
+# * Credited.On.Time
+#   is the total number of sufficiently-long comments that were submitted on
+#   time, unless GRADE_MODE is not 0, in which case it's the total number of
+#   comments rounded from Credited.Partial.Cred.Frac
+# * Total.On.Time
+#   is the total number of comments that were submitted on time, unless
+#   GRADE_MODE is not 0, in which case it's the total number of comments rounded
+#   from Partial.Cred.Frac
+# * Total.Comments
+#   is the total number of comments that were submitted.
+names(on_time_count) <- c("Email.Address", "Total.Comments", "Partial.Cred.Frac", "Credited.Partial.Cred.Frac", "Total.On.Time", "Credited.On.Time")
 
 # Merge the two statistics data.frames
 stats <- data.frame(merge(comment_statistics, on_time_count, by = "Email.Address"), Score = -1)
+stats <- score(stats)
 
-####Evaluate and assign score ###CHANGE VALUES HERE
-
-# Students with at least 4 comments and a total of 35 words across the 4
-# comments get 5 points
-sel <- (stats$On.Time >= 4 & stats$Word.Count >= 35)
-stats$Score[sel & stats$Score < 0] <- 5
-sel <- (stats$On.Time >= 3 & stats$Word.Count >= 35)
-stats$Score[sel & stats$Score < 0] <- 4
-sel <- (stats$On.Time >= 3 & stats$Word.Count >= 25)
-stats$Score[sel & stats$Score < 0] <- 3
-sel <- (stats$On.Time >= 2 & stats$Word.Count >= 18)
-stats$Score[sel & stats$Score < 0] <- 2
-sel <- (stats$On.Time >= 1 & stats$Word.Count >= 9)
-stats$Score[sel & stats$Score < 0] <- 1
-# Students who didn't answer at all or had fewer than 9 words in their answers
-stats$Score[stats$Score < 0] <- 0
-
-##merge scores with roster via email address
+# Merge scores with roster via email address
 mg <- merge(rost, stats, "Email.Address", all.x = TRUE) ## contains email and stu id
 
 # Replace NAs from merge with 0s (looks nicer)
