@@ -291,21 +291,24 @@ rost <- read.xlsx(roster, 1)
 
 # Calculates word count for each comment
 count_words <- function(comment) {
-    individual_word_counts <- 0
-    word_count_list <- sapply(strsplit(comment, "\\s+"), FUN = nchar)
+    # If the comment's blank, it's blank
+    if (nchar(gsub("\\s+", "", comment)) == 0)
+        return(c(0, 0))
 
-    if (length(word_count_list) > 1)
-        individual_word_counts <- sapply(strsplit(comment, "\\s+"), FUN = nchar)[,1]
+    # Count number of characters per word. Need gsub to remove leading spaces
+    # because otherwise, the leading spaces are counted as a word of 0 length.
+    word_char_nums <- sapply(strsplit(gsub("^\\s+", "", comment), "\\s+"), FUN = nchar)
 
     # Count number of words with the same length as the first word
-    same_length_words <- sum(individual_word_counts == individual_word_counts[1])
+    same_length_words <- sum(word_char_nums == word_char_nums[1])
 
-    total_word_count <- sum(attr(gregexpr("\\s+", comment)[[1]], "match.length")) + 1
+    # Count number of words
+    total_word_count <- length(word_char_nums)
 
     # if same_length_words is equal to the total word count, there be trouble.
-    if (WORDS_NOT_BE_SAME_LENGTH && same_length_words == total_word_count) {
-       return(c(0, total_word_count))
-    }
+    if (WORDS_NOT_BE_SAME_LENGTH && same_length_words == total_word_count)
+        return(c(0, total_word_count))
+
     c(total_word_count, total_word_count)
 }
 
@@ -423,6 +426,9 @@ on_time_count <- cbind(on_time_count, round(on_time_count[,3]), round(on_time_co
 
 # Reorder columns so they're in a more logical order
 on_time_count <- on_time_count[, c(1, 4, 3, 2, 5, 6)]
+
+# TODO: Total word count not giving the correct values. One-word answers are not
+# included in the total word count even though the strict settings are both 0.
 
 # Clarify what output columns are for comment statistics
 # * Partial.Cred.Frac
