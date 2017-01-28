@@ -306,7 +306,7 @@ count_words <- function(comment) {
     total_word_count <- length(word_char_nums)
 
     # if same_length_words is equal to the total word count, there be trouble.
-    if (WORDS_NOT_BE_SAME_LENGTH && same_length_words == total_word_count)
+    if (total_word_count != 1 && WORDS_NOT_BE_SAME_LENGTH && same_length_words == total_word_count)
         return(c(0, total_word_count))
 
     c(total_word_count, total_word_count)
@@ -426,9 +426,6 @@ on_time_count <- cbind(on_time_count, round(on_time_count[,3]), round(on_time_co
 
 # Reorder columns so they're in a more logical order
 on_time_count <- on_time_count[, c(1, 4, 3, 2, 5, 6)]
-
-# TODO: Total word count not giving the correct values. One-word answers are not
-# included in the total word count even though the strict settings are both 0.
 
 # Clarify what output columns are for comment statistics
 # * Partial.Cred.Frac
