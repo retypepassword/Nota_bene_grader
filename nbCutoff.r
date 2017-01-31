@@ -6,9 +6,18 @@ library(httr)
 #install.packages('yaml')
 library(yaml)
 
-config_file_name <- "grade_cutoffs.txt"
+################################################################################
+#                            Configuration Options                             #
+################################################################################
 
+# Name of the configuration file (with grade cutoffs, instructor, etc.)
+config_file_name <- "grade_cutoffs.txt"
+# Don't set this to false until you're sure you have the right filename above:
+prompt_each_time <- TRUE
+
+################################################################################
 # Don't need to change anything below this line ################################
+################################################################################
 
 # Legacy configuration options (not ported to YAML)
 
@@ -73,37 +82,52 @@ STDIN <- file("stdin")
 
 # Figure out configuration file's filename (defaults to grade_cutoffs.txt in
 # same directory)
-yaml_name <- ""
-repeat {
-    if (usingRScript()) {
-        cat(paste("Enter the name of the configuration file (leave blank to use ", config_file_name, "): ", sep = ""))
-        yaml_name <- readLines(STDIN, 1)
-    } else {
-        yaml_name <- readline(paste("Enter the name of the configuration file (leave blank to use ", config_file_name, "): ", sep = ""))
+if (prompt_each_time) {
+    repeat {
+        if (usingRScript()) {
+            cat(paste("Enter the name of the configuration file (leave blank to use ", config_file_name, "): ", sep = ""))
+            yaml_name <- readLines(STDIN, 1)
+        } else {
+            yaml_name <- readline(paste("Enter the name of the configuration file (leave blank to use ", config_file_name, "): ", sep = ""))
+        }
+
+        if (is.na(yaml_name) || yaml_name == "") yaml_name <- config_file_name
+
+        tryCatch({
+            yaml_file <- yaml.load_file(yaml_name)
+            break
+        }, warning = function(war) {
+            cat("Invalid configuration file name. Please try again.\n")
+        }, error = function(err) {
+            cat("Invalid configuration file name. Please try again.\n")
+        })
     }
-
-    if (is.na(yaml_name) || yaml_name == "") yaml_name <- config_file_name
-
-    tryCatch({
-        yaml_file <- yaml.load_file(yaml_name)
-        break
-    }, warning = function(war) {
-        cat("Invalid configuration file name. Please try again.\n")
-    }, error = function(err) {
-        cat("Invalid configuration file name. Please try again.\n")
-    })
+} else {
+    yaml_file <- yaml.load_file(yaml_name)
 }
 
 # Set configuration options from yaml file
 roster <- yaml_file$roster
 instruct <- yaml_file$instructor
+canvas <- yaml_file$canvas
+canvas_upload <- yaml_file$canvas_upload
 canvas_token <- yaml_file$canvas_token
+canvas_course <- yaml_file$canvas_course_id
+canvas_grades_file <- yaml_file$canvas_grades_file
 EMAIL <- yaml_file$email
 PASSWORD <- yaml_file$password
 MIN_WORDS <- yaml_file$min_words_per_comment
 AVG_CHARS_PER <- yaml_file$avg_letters_per_word
 WORDS_NOT_BE_SAME_LENGTH <- yaml_file$words_cannot_be_same_length
 scoring_cutoffs <- yaml_file$Scores
+
+# Set assignment name
+if (usingRScript()) {
+    cat("Enter the name of the assignment (for Canvas, e.g. NB1): ")
+    assig_name <- readLines(STDIN, 1)
+} else {
+    assig_name <- readline("Enter the name of the assignment (for Canvas, e.g. NB1): ")
+}
 
 ################################################################################
 #                                Data Retrieval                                #
@@ -507,6 +531,10 @@ data2 <- data2[!rownames(data2) %in% rownames(lowDupScores), ]
 #Rename Columns to SmartSite-Friendly Format
 names(data2) = c("Student Id", paste("NB", assign_num, "[5]", sep=""))
 
+################################################################################
+#                              SmartSite Output                                #
+################################################################################
+
 ####Write new file
 output2 <- createWorkbook()
 sheet <- createSheet(output2, sheetName="sheet0")
@@ -514,4 +542,91 @@ addDataFrame(data2, sheet, row.names=FALSE)
 saveWorkbook(output2, paste(outfilename, "_processed_45_25_", instruct, "_upload.xlsx", sep=""))
 ###
 ##### Import the above file into smartsite. Appears in the working directory (NB folder) ###
+
+################################################################################
+#                                 Canvas Output (Untested)                     #
+################################################################################
+
+if (!canvas) quit()
+
+# Save via API (untested) and create uploadable CSV for backup
+auth <- add_headers("Authorization" = paste("Bearer ", canvas_token, sep = ""))
+
+# Wrangle grade data to fit into Canvas properly
+canvas_grades.df <- data.frame(posted.grade = data2[,2])
+rownames(canvas_grades.df) <- paste("grade_data[sis_user_id:", data2[,1], "][posted_grade]", sep = "")
+canvas_grades <- as.list(as.data.frame(t(canvas_grades.df)))
+
+# Get assignment id. Two ways:
+
+# 1. Search for existing assignment with same name:
+assignment_search_hdl <- GET(url = paste("https://canvas.ucdavis.edu/api/v1/courses/", canvas_course, "/assignments", sep = ""), 
+    query = list("search_term" = assig_name),
+    config = c(ua, auth))
+assignment_resp <- content(assignment_search_hdl, type="application/json")
+
+# 2. Create new assignment with assignment name:
+if (length(assignment_resp) != 1) {
+    assignment_handle <- POST(url = paste("https://canvas.ucdavis.edu/api/v1/courses/", canvas_course, "/assignments", sep = ""),
+        body = list(
+            "assignment[name]" = assig_name,
+            "assignment[submission_types][]" = "none",
+            "assignment[published]" = TRUE,
+            "assignment[points_possible]" = sort(as.numeric(names(scoring_cutoffs)), decreasing = TRUE)[1]
+        ), 
+        encode = "multipart",
+        config = c(ua, auth))
+    assignment_resp <- content(assignment_handle, type = "application/json")
+}
+
+### Create uploadable CSV (for backup)
+cat("Creating backup CSV...\n")
+
+# Read in original CSV
+canvas_grades_orig <- read.csv(canvas_grades_file, check.names = FALSE)
+
+# Add new things to the front (easier than adding to the middle). Preserve the
+# order of everything else.
+# section_idx is the position of the item. If we take everything before it
+# (section_idx - 1) and then tack on everything after it (section_idx + 1), we
+# skip the item. To keep section, we simply start by taking it (section_idx)
+# and then tacking on everything after it (section_idx + 1)
+section_idx <- match(paste(assig_name, " (", assignment_resp$id, ")", sep = ""), names(canvas_grades_orig))
+if (is.na(section_idx)) {
+    section_idx <- match("Section", names(canvas_grades_orig))
+    canvas_grades_csv <- canvas_grades_orig[,seq(1, section_idx)]
+} else {
+    canvas_grades_csv <- canvas_grades_orig[,seq(1, section_idx - 1)]
+}
+canvas_grades_add <- data2
+names(canvas_grades_add) <- c("SIS User ID", paste(assig_name, " (", assignment_resp$id, ")", sep = ""))
+
+# Merge in grades
+canvas_grades_new <- merge(canvas_grades_csv, canvas_grades_add, by = "SIS User ID", all.x = TRUE)
+
+# Add points possible to the first row of the last column (added grades are in
+# last column)
+canvas_grades_new[1, length(canvas_grades_new)] <- assignment_resp$points_possible
+
+# Replace rest of data.frame
+canvas_grades_new <- cbind(canvas_grades_new, canvas_grades_orig[,seq(section_idx + 1, length(canvas_grades_orig))])
+
+# Output new CSV
+date_and_time <- format(Sys.time(), format = "%d_%b_%H_%M", tz = "America/Los_Angeles")
+write.csv(canvas_grades_new, file = paste(date_and_time, canvas_grades_file, sep = "_"), row.names = FALSE, na = "")
+
+########## Upload scores to Canvas #########
+if (!canvas_upload) quit()
+
+### Stick grades straight onto Canvas
+cat("Uploading scores...\n")
+
+submission_handle <- POST(url = paste("https://canvas.ucdavis.edu/api/v1/courses/",
+        canvas_course, "/assignments/", assignment_resp$id, "/submissions/update_grades", sep = ""),
+    body = canvas_grades,
+    encode = "multipart",
+    config = c(ua, auth))
+status <- content(submission_handle)
+
+# cat(paste("Upload status: ", status$workflow_state, "\n", sep = ""))
 

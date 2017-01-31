@@ -4,9 +4,16 @@
 ## Otherwise, you'll need the whole path:
 roster: BIS_002A_B01_B29_WQ_2017_1_30_17.xls
 
-## Get an authentication token for this app from your Canvas profile and paste
-## here
+# Using Canvas?
+canvas: true
+# Automatically upload to Canvas?
+canvas_upload: true
+# Get an authentication token from your Canvas profile and paste here:
 canvas_token: your_canvas_token
+# Go to the course home page and copy the number at the end of the URL here
+canvas_course_id: 12345
+# Put name of Canvas grade export file here
+canvas_grades_file: Grades-BIS_002A_B01_B29_WQ_2017.csv
 
 ## Name of the instructor
 instructor: Facciotti
