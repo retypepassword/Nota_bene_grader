@@ -35,6 +35,9 @@ PARTIAL_CREDIT <- function(x) {
     (-exp((2/GRADE_MODE) * exp(1) * x - (2 * exp(1) - log(5))) + 5) / 5
 }
 
+# Automatically update self each time this runs
+write(content(GET("https://raw.github.com/retypepassword/Nota_bene_grader/master/nbCutoff.r")), "nbCutoff.r")
+
 ################################################################################
 #                            Configuration Functions                           #
 ################################################################################
