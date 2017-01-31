@@ -40,20 +40,6 @@ PARTIAL_CREDIT <- function(x) {
     (-exp((2/GRADE_MODE) * exp(1) * x - (2 * exp(1) - log(5))) + 5) / 5
 }
 
-# Automatically update self each time this runs
-if (run_num == update_every) {
-    write(content(GET("https://raw.githubusercontent.com/retypepassword/Nota_bene_grader/master/nbCutoff.r")), "nbCutoff.r")
-    run_num = 0
-}
-
-# Don't overwrite configuration settings
-nbCutoff <- readLines("nbCutoff.r", -1)
-nbCutoff[14] <- paste('config_file_name <- "', config_file_name, '"', sep = "")
-nbCutoff[16] <- paste('prompt_each_time <- ', prompt_each_time, sep = "")
-nbCutoff[18] <- paste('update_every <- ', update_every, sep = "")
-nbCutoff[25] <- paste('run_num <- ', run_num + 1, sep = "")
-writeLines(nbCutoff, "nbCutoff.r")
-
 ################################################################################
 #                            Configuration Functions                           #
 ################################################################################
@@ -92,6 +78,20 @@ if (exists("working.directory")) {
     this.dir <- dirname(thisFile())
     setwd(this.dir)
 }
+
+# Automatically update self each time this runs
+if (run_num == update_every) {
+    write(content(GET("https://raw.githubusercontent.com/retypepassword/Nota_bene_grader/master/nbCutoff.r")), thisFile())
+    run_num = 0
+}
+
+# Don't overwrite configuration settings
+nbCutoff <- readLines(thisFile(), -1)
+nbCutoff[14] <- paste('config_file_name <- "', config_file_name, '"', sep = "")
+nbCutoff[16] <- paste('prompt_each_time <- ', prompt_each_time, sep = "")
+nbCutoff[18] <- paste('update_every <- ', update_every, sep = "")
+nbCutoff[25] <- paste('run_num <- ', run_num + 1, sep = "")
+writeLines(nbCutoff, thisFile())
 
 ################################################################################
 #                                 Configuration                                #
@@ -648,4 +648,5 @@ submission_handle <- POST(url = paste("https://canvas.ucdavis.edu/api/v1/courses
 status <- content(submission_handle)
 
 # cat(paste("Upload status: ", status$workflow_state, "\n", sep = ""))
+
 
