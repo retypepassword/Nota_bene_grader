@@ -1,26 +1,44 @@
+## INSTRUCTIONS: Copy this file to grade_cutoffs.txt and modify values there
+
 ## Download the latest roster and put the path to this file. If you put the
 ## roster in folder specified above (or the same folder as the R script if no
 ## folder is specified), you can just put the filename.
 ## Otherwise, you'll need the whole path:
 roster: BIS_002A_B01_B29_WQ_2017_1_30_17.xls
 
+
+## Settings for Canvas
+
 # Using Canvas?
 canvas: true
+
 # Automatically upload to Canvas?
 canvas_upload: true
+
 # Get an authentication token from your Canvas profile and paste here:
 canvas_token: your_canvas_token
+
 # Go to the course home page and copy the number at the end of the URL here
 canvas_course_id: 12345
+
 # Put name of Canvas grade export file here
 canvas_grades_file: Grades-BIS_002A_B01_B29_WQ_2017.csv
+
+
+## Settings for SmartSite
 
 ## Name of the instructor
 instructor: Facciotti
 
+
+## Settings for Nota Bene
+
 ## Put login info for Nota Bene here:
 email: you@example.com
 password: your_password
+
+
+## Grading Settings
 
 ## Don't count comments as "comments" if they have fewer than:
 ## (they'll be considered "short_comments" instead)
