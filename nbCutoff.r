@@ -80,7 +80,7 @@ if (exists("working.directory")) {
 }
 
 # Automatically update self each time this runs
-if (run_num == update_every) {
+if (run_num >= update_every) {
     write(content(GET("https://raw.githubusercontent.com/retypepassword/Nota_bene_grader/master/nbCutoff.r")), thisFile())
     run_num = 0
 }
