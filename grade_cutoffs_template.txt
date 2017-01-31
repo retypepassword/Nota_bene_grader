@@ -5,6 +5,8 @@
 ## folder is specified), you can just put the filename.
 ## Otherwise, you'll need the whole path:
 roster: BIS_002A_B01_B29_WQ_2017_1_30_17.xls
+sid_column: User ID
+email_column: Email Address
 
 
 ## Settings for Canvas

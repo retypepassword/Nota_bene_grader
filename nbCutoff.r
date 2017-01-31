@@ -127,6 +127,8 @@ if (prompt_each_time) {
 
 # Set configuration options from yaml file
 roster <- yaml_file$roster
+roster_sid <- make.names(yaml_file$sid_column)
+roster_email <- make.names(yaml_file$email_column)
 instruct <- yaml_file$instructor
 canvas <- yaml_file$canvas
 canvas_upload <- yaml_file$canvas_upload
@@ -506,18 +508,18 @@ stats <- data.frame(merge(comment_statistics, on_time_count, by = "Email.Address
 stats <- score(stats, scoring_cutoffs)
 
 # Merge scores with roster via email address
-mg <- merge(rost, stats, "Email.Address", all.x = TRUE) ## contains email and stu id
+mg <- merge(rost, stats, by.x = roster_email, by.y = "Email.Address", all.x = TRUE) ## contains email and stu id
 
 # Replace NAs from merge with 0s (looks nicer)
 mg[is.na(mg)] <- 0
 
 # Find duplicate student ids and remove the one(s) with the lower score (if
 # there are duplicates and if there's one with a lower score)
-duplicates <- mg[mg$User.ID %in% mg$User.ID[duplicated(mg$User.ID)], ]
+duplicates <- mg[mg[[roster_sid]] %in% mg[[roster_sid]][duplicated(mg[[roster_sid]])], ]
 
 # Get highest score of duplicates
 dupScores <- duplicates[order(duplicates$Score, decreasing=TRUE), ]
-highDupScores <- dupScores[unique(match(duplicates$User.ID, dupScores$User.ID)),]
+highDupScores <- dupScores[unique(match(duplicates[[roster_sid]], dupScores[[roster_sid]])),]
 lowDupScores <- dupScores[!rownames(dupScores) %in% rownames(highDupScores),]
 
 # Write New Workbook for sorting and spot checks (contains all data used for
@@ -542,7 +544,7 @@ saveWorkbook(output1, paste(outfilename, "_processed_45_25_", instruct, ".xlsx",
 # scores/comments for existing items.
 
 ###Create New Data Frame For Output
-data2 <- data.frame(Student.Id=mg$User.ID, New.Item=mg$Score)
+data2 <- data.frame(Student.Id=mg[[roster_sid]], New.Item=mg$Score)
 
 # Filter out low-score duplicates
 data2 <- data2[!rownames(data2) %in% rownames(lowDupScores), ]
