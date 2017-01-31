@@ -596,8 +596,9 @@ if (length(assignment_resp) != 1) {
         encode = "multipart",
         config = c(ua, auth))
     assignment_resp <- content(assignment_handle, type = "application/json")
+} else {
+    assignment_resp <- assignment_resp[[1]]
 }
-
 ### Create uploadable CSV (for backup)
 cat("Creating backup CSV...\n")
 
