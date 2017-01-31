@@ -38,6 +38,12 @@ PARTIAL_CREDIT <- function(x) {
 # Automatically update self each time this runs
 write(content(GET("https://raw.github.com/retypepassword/Nota_bene_grader/master/nbCutoff.r")), "nbCutoff.r")
 
+# Don't overwrite configuration settings
+nbCutoff <- readLines("nbCutoff.r", -1)
+nbCutoff[14] <- paste('config_file_name <- "', config_file_name, '"', sep = "")
+nbCutoff[16] <- paste('prompt_each_time <- ', prompt_each_time, sep = "")
+writeLines(nbCutoff, "nbCutoff.r")
+
 ################################################################################
 #                            Configuration Functions                           #
 ################################################################################
