@@ -36,7 +36,7 @@ PARTIAL_CREDIT <- function(x) {
 }
 
 # Automatically update self each time this runs
-write(content(GET("https://raw.github.com/retypepassword/Nota_bene_grader/master/nbCutoff.r")), "nbCutoff.r")
+write(content(GET("https://raw.githubusercontent.com/retypepassword/Nota_bene_grader/master/nbCutoff.r")), "nbCutoff.r")
 
 # Don't overwrite configuration settings
 nbCutoff <- readLines("nbCutoff.r", -1)
