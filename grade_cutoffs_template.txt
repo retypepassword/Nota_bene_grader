@@ -1,0 +1,53 @@
+## Download the latest roster and put the path to this file. If you put the
+## roster in folder specified above (or the same folder as the R script if no
+## folder is specified), you can just put the filename.
+## Otherwise, you'll need the whole path:
+roster: BIS_002A_B01_B29_WQ_2017_1_30_17.xls
+
+## Get an authentication token for this app from your Canvas profile and paste
+## here
+canvas_token: your_canvas_token
+
+## Name of the instructor
+instructor: Facciotti
+
+## Put login info for Nota Bene here:
+email: you@example.com
+password: your_password
+
+## Don't count comments as "comments" if they have fewer than:
+## (they'll be considered "short_comments" instead)
+min_words_per_comment: 0
+avg_letters_per_word: 0
+
+## Recommend leaving this as true, unless you want to allow comments like
+## "something something something something something"
+words_cannot_be_same_length: true
+
+## Please write scores in descending order. The script won't work right if
+## they're not in descending order. More than 5 scores can be added if
+## necessary.
+Scores:
+    # For a score of 5, the student must have made at least 4 substantial
+    # comments or at least 10 comments total, with a total of at least 35 words
+    # between the comments
+    5:
+        substantial_comments: 4
+        words               : 35
+        total_comments      : 10
+    4:
+        substantial_comments: 3
+        words               : 35
+        total_comments      : 8
+    3:
+        substantial_comments: 3
+        words               : 25
+        total_comments      : 8
+    2:
+        substantial_comments: 2
+        words               : 18
+        total_comments      : 3
+    1:
+        substantial_comments: 1
+        words               : 9
+        total_comments      : 1

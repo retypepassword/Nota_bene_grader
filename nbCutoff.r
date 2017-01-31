@@ -3,28 +3,14 @@
 suppressPackageStartupMessages(library(xlsx))
 #install.packages('httr')
 library(httr)
+#install.packages('yaml')
+library(yaml)
 
-################################################################################
-#                              User Settings                                   #
-################################################################################
+config_file_name <- "grade_cutoffs.txt"
 
-### Set Parameters for Analysis
-# Make a folder to hold all NB files- paste its path below. Defaults to the R
-# script's directory. Put path here if you want a different directory:
-# working.directory <- "/Users/jeffreymiller/Desktop/NB Grades"
+# Don't need to change anything below this line ################################
 
-### Download the latest roster and put the path to this file. If you put the
-# roster in folder specified above (or the same folder as the R script if no
-# folder is specified), you can just put the filename.
-# Otherwise, you'll need the whole path:
-roster <- "BIS_002A_B01_B29_WQ_2017_1_26_17.xls"
-
-### Change only once
-instruct <- "Facciotti"
-
-### Put login info for Nota Bene here:
-EMAIL <- ""
-PASSWORD <- ""
+# Legacy configuration options (not ported to YAML)
 
 # Grading mode (choice of 0: No credit if late, 1: Partial credit if late 1
 # minute or less, 2: Partial credit if late 2 minutes or less, etc.)
@@ -39,42 +25,6 @@ GRADE_MODE <- 0
 PARTIAL_CREDIT <- function(x) {
     (-exp((2/GRADE_MODE) * exp(1) * x - (2 * exp(1) - log(5))) + 5) / 5
 }
-
-# Don't count comments with fewer than:
-MIN_WORDS <- 0 # words (to prevent comments like "a" to make it seem like there are five comments) and an average of
-AVG_CHARS_PER <- 0 # characters per word (to prevent comments like "a a a a a" to get around the word limit)
-WORDS_NOT_BE_SAME_LENGTH <- TRUE # make sure the words are different words (to prevent comments like "something
-                              # something something something something" to get around the word limit and
-                              # character average limit)
-
-score <- function(stats) {
-    # Replace Comment.Credit.Word.Count and Credited.On.Time with the more
-    # readable Word.Count and On.Time, respectively.
-    names(stats) <- replace(names(stats), c(8, 14), c('Word.Count', 'On.Time'))
-
-####Evaluate and assign score ###CHANGE VALUES HERE
-    # Students with at least 4 sufficiently-long comments (or at least 10 short
-    # comments) and a total of at least 35 words across the 4 comments get 5 points
-    sel <- (stats$On.Time >= 4 & stats$Word.Count >= 35)
-    stats$Score[sel & stats$Score < 0] <- 5
-    sel <- (stats$On.Time >= 3 & stats$Word.Count >= 35)
-    stats$Score[sel & stats$Score < 0] <- 4
-    sel <- (stats$On.Time >= 3 & stats$Word.Count >= 25)
-    stats$Score[sel & stats$Score < 0] <- 3
-    sel <- (stats$On.Time >= 2 & stats$Word.Count >= 18)
-    stats$Score[sel & stats$Score < 0] <- 2
-    sel <- (stats$On.Time >= 1 & stats$Word.Count >= 9)
-    stats$Score[sel & stats$Score < 0] <- 1
-    # Students who didn't answer at all or had fewer than 9 words in their answers
-    stats$Score[stats$Score < 0] <- 0
-
-    # Undo name changes made in beginning of function
-    names(stats) <- replace(names(stats), c(8, 14), c('Comment.Credit.Word.Count', 'Credited.On.Time'))
-
-    stats
-}
-
-# Don't need to change anything below this line ################################
 
 ################################################################################
 #                            Configuration Functions                           #
@@ -116,10 +66,49 @@ if (exists("working.directory")) {
 }
 
 ################################################################################
-#                                Data Retrieval                                #
+#                                 Configuration                                #
 ################################################################################
 
 STDIN <- file("stdin")
+
+# Figure out configuration file's filename (defaults to grade_cutoffs.txt in
+# same directory)
+yaml_name <- ""
+repeat {
+    if (usingRScript()) {
+        cat(paste("Enter the name of the configuration file (leave blank to use ", config_file_name, "): ", sep = ""))
+        yaml_name <- readLines(STDIN, 1)
+    } else {
+        yaml_name <- readline(paste("Enter the name of the configuration file (leave blank to use ", config_file_name, "): ", sep = ""))
+    }
+
+    if (is.na(yaml_name) || yaml_name == "") yaml_name <- config_file_name
+
+    tryCatch({
+        yaml_file <- yaml.load_file(yaml_name)
+        break
+    }, warning = function(war) {
+        cat("Invalid configuration file name. Please try again.\n")
+    }, error = function(err) {
+        cat("Invalid configuration file name. Please try again.\n")
+    })
+}
+
+# Set configuration options from yaml file
+roster <- yaml_file$roster
+instruct <- yaml_file$instructor
+canvas_token <- yaml_file$canvas_token
+EMAIL <- yaml_file$email
+PASSWORD <- yaml_file$password
+MIN_WORDS <- yaml_file$min_words_per_comment
+AVG_CHARS_PER <- yaml_file$avg_letters_per_word
+WORDS_NOT_BE_SAME_LENGTH <- yaml_file$words_cannot_be_same_length
+scoring_cutoffs <- yaml_file$Scores
+
+################################################################################
+#                                Data Retrieval                                #
+################################################################################
+
 
 # Set User Agent string so it doesn't look like we're scraping data with R.
 # Change to something else (e.g., Chrome) if desired. Should have no effect
@@ -383,6 +372,28 @@ partial_credit_func <- function(date, due_date) {
     ifelse(percentage < 0, 0, percentage)
 }
 
+score <- function(stats, score_cutoffs) {
+    # Replace Comment.Credit.Word.Count and Credited.On.Time with the more
+    # readable Word.Count and On.Time, respectively.
+    names(stats) <- replace(names(stats), c(8, 14), c('Word.Count', 'Substantial.Comments'))
+
+    for (score in names(score_cutoffs)) {
+        min_substantial <- score_cutoffs[[score]]$substantial_comments
+        min_total <- score_cutoffs[[score]]$total_comments
+        min_words <- score_cutoffs[[score]]$words
+        sel <- ((stats$Substantial.Comments >= min_substantial | stats$Total.On.Time >= min_total) & stats$Word.Count >= min_words)
+        stats$Score[sel & stats$Score < 0] <- as.numeric(score)
+    }
+
+    # Students who didn't answer at all or had fewer than 9 words in their answers
+    stats$Score[stats$Score < 0] <- 0
+
+    # Undo name changes made in beginning of function
+    names(stats) <- replace(names(stats), c(8, 14), c('Comment.Credit.Word.Count', 'Credited.On.Time'))
+
+    stats
+}
+
 # Figure out which comments are on time and sum the number of on-time comments
 # (this part: sapply(FUN = on_time_credit, data[, 'Time']))
 # for each e-mail address
@@ -449,7 +460,7 @@ names(on_time_count) <- c("Email.Address", "Total.Comments", "Partial.Cred.Frac"
 
 # Merge the two statistics data.frames
 stats <- data.frame(merge(comment_statistics, on_time_count, by = "Email.Address"), Score = -1)
-stats <- score(stats)
+stats <- score(stats, scoring_cutoffs)
 
 # Merge scores with roster via email address
 mg <- merge(rost, stats, "Email.Address", all.x = TRUE) ## contains email and stu id
