@@ -41,6 +41,12 @@ In grade_cutoffs.txt:
             * Comment/Word cutoffs should be indented an additional four spaces beyond
               that.
 
+### Optional setup:  
+* Update the config_file_name variable to be the name of the configuration file
+  you always use
+* Set prompt_each_time to FALSE, so you don't have to press [enter] every time
+  you run the script to accept the configuration filename as is.
+
 ## Usage:  
 * In the Console box in RStudio, type `source('/path/to/nbCutoff.txt')`,
   replacing  `/path/to` with the actual path to your nbCutoff.txt file 
@@ -50,7 +56,7 @@ In grade_cutoffs.txt:
   Windows, `'/Users/eric/Desktop/NBGrader/nbCutoff.txt'` on Mac, or
   `'/home/eric/NBGrader/nbCutoff.txt'` on Linux) and follow prompts
 * The script updates itself each time it's run, so don't change the script;
-  changes will be overwritten
+  changes will be overwritten (except where noted above in "Optional setup")
 * Inspect the spot check output file for errors
     * `Orig.Total.Words` and `Total.Word.Count`
       is the total number of words in the original comment, before applying any
