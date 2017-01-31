@@ -14,10 +14,15 @@ library(yaml)
 config_file_name <- "grade_cutoffs.txt"
 # Don't set this to false until you're sure you have the right filename above:
 prompt_each_time <- TRUE
+# Update every [blank] times this script is run
+update_every <- 5
 
 ################################################################################
 # Don't need to change anything below this line ################################
 ################################################################################
+
+# Keep track of number of runs
+run_num <- 1
 
 # Legacy configuration options (not ported to YAML)
 
@@ -36,12 +41,17 @@ PARTIAL_CREDIT <- function(x) {
 }
 
 # Automatically update self each time this runs
-write(content(GET("https://raw.githubusercontent.com/retypepassword/Nota_bene_grader/master/nbCutoff.r")), "nbCutoff.r")
+if (run_num == update_every) {
+    write(content(GET("https://raw.githubusercontent.com/retypepassword/Nota_bene_grader/master/nbCutoff.r")), "nbCutoff.r")
+    run_num = 0
+}
 
 # Don't overwrite configuration settings
 nbCutoff <- readLines("nbCutoff.r", -1)
 nbCutoff[14] <- paste('config_file_name <- "', config_file_name, '"', sep = "")
 nbCutoff[16] <- paste('prompt_each_time <- ', prompt_each_time, sep = "")
+nbCutoff[18] <- paste('update_every <- ', update_every, sep = "")
+nbCutoff[25] <- paste('run_num <- ', run_num + 1, sep = "")
 writeLines(nbCutoff, "nbCutoff.r")
 
 ################################################################################
