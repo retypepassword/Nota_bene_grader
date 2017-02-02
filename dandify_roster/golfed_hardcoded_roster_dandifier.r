@@ -1,5 +1,5 @@
 library(xml2)
-r=read_html(readline("Enter filename: "))
+r=read_html(file.choose())
 x=xml_text;a=xml_find_all;p=paste;b="/../following-sibling::";n="position()"
 e=a(r,p("//th[b='CRN']",b,"*[1]/td[2]",sep=""))
 g=function(m,s)x(a(r,p("(//th[b='Seq'])[",s,"]",b,"tr[",n,">1 and ",n,"<last()-1]/td[",match(m,y),"]",sep="")))
