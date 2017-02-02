@@ -58,9 +58,9 @@ write.csv(
         #
         # Args:
         #   output: The output data.frame (initialized as empty matrix, cf.
-        #   empty matrix below)
+        #     empty matrix below)
         #   section_pos: The position of the section within the roster document
-        #   (from seq(crns), below)
+        #     (from seq(crns), below)
         # Returns:
         #   The output data.frame with data added from the specified section.
 
