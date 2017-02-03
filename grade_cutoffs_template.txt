@@ -42,10 +42,10 @@ password: your_password
 
 ## Grading Settings
 
-## Don't count comments as "comments" if they have fewer than:
+## Don't count comments as substantial_comments if they have fewer than:
 ## (they'll be considered "short_comments" instead)
-min_words_per_comment: 0
-avg_letters_per_word: 0
+min_words_per_comment: 5
+avg_letters_per_word: 4
 
 ## Recommend leaving this as true, unless you want to allow comments like
 ## "something something something something something"
