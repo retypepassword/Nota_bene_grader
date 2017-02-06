@@ -68,15 +68,15 @@ write.csv(
         if(length(get_items("Seq", col_names, section_pos)) == 0) {
             # Set the names for all 14 columns in the output table and return
             # the output table
-            return(setNames(output, c("CRN", "Section", col_names)))
+            return(output)
         }
 
         # Tack on rows for each section to rows for previous sections within the
         # same data.frame/output table
         rbind(output,
             data.frame(
-                xml_text(crns[section_pos]),
-                xml_text(sections[section_pos]),
+                CRN = xml_text(crns[section_pos]),
+                Section = xml_text(sections[section_pos]),
                 # Call get_items(name, col_names, section_pos) on each column
                 # (get the text from each row).
                 # Also, set simplify to false to keep it as a named list (don't convert to matrix)
