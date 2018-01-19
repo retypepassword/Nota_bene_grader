@@ -140,6 +140,7 @@ PASSWORD <- yaml_file$password
 MIN_WORDS <- yaml_file$min_words_per_comment
 AVG_CHARS_PER <- yaml_file$avg_letters_per_word
 WORDS_NOT_BE_SAME_LENGTH <- yaml_file$words_cannot_be_same_length
+MINIMUM_HASHTAG_LENGTH <- yaml_file$min_hashtag_length
 scoring_cutoffs <- yaml_file$Scores
 
 # Set assignment name
@@ -277,7 +278,6 @@ nb_data <- content(nota_bene, type = "application/json")
 cat("Keep waiting...\n")
 
 # Get just the full name, email, creation time, and comments
-# Get just the full name, email, creation time, and comments
 get_data <- function(comment) {
     student_info <- student_data$payload[[as.character(comment$id_author)]]
     if (is.null(student_info)) {
@@ -306,9 +306,6 @@ cat("Calculating scores...\n")
 #set workfile name from assignment name
 nb_file <- nb_assig_data$payload$files[[as.character(nb_id)]]$title
 outfilename <- substr(basename(nb_file), 1, nchar(basename(nb_file)) - 4)
-
-###Split out worksheet into in objects
-rost <- read.xlsx(roster, 1)
 
 # As of 3/3/16, on the Nota Bene website, the character count, comment count,
 # and word count statistics for the XLS file (when one clicks Download as XLS)
@@ -351,6 +348,21 @@ count_characters <- function(comment) {
     nchar(comment)
 }
 
+count_hashtags <- function(comment) {
+    # Match hashtags that are between MINIMUM_HASHTAG_LENGTH and infinity long
+    regex <- paste("#[a-z]{", toString(MINIMUM_HASHTAG_LENGTH), ",}", sep="")
+
+    # Get a vector of lengths of matches
+    matches <- gregexpr(regex, comment)[[1]]
+
+    # Get the length of the vector
+    matched_items_lengths <- attr(matches, "match.length")
+
+    # gregexpr returns a single-length vector with -1 to indicate no matches,
+    # so excluding -1 will return a length of 0.
+    length(matched_items_lengths[matched_items_lengths != -1])
+}
+
 # Convenience function to string the word count and character count into a list
 count_words_and_characters <- function(comment) {
     counted <- count_words(comment)
@@ -358,11 +370,12 @@ count_words_and_characters <- function(comment) {
     words <- counted[1]
     credited_words <- words
     characters <- count_characters(comment)
+    hashtags <- count_hashtags(comment)
     
     if (words < MIN_WORDS) credited_words <- 0
     if (words == 0 || (characters / words) < AVG_CHARS_PER) credited_words <- 0
 
-    c(total_words, words, credited_words, characters)
+    c(total_words, words, credited_words, characters, hashtags)
 }
 
 # Returns (1, 1) for on time comments and (0, 1) for late comments or something
@@ -388,6 +401,9 @@ modify_late <- function(word_character_counts, on_time_data) {
     # Set to 0 if late at all
     # word_character_counts * floor(on_time_data[,1])
     # Set to a fraction if only a little late; 0 otherwise
+    # Note: word_character_counts is a table, so cbind-ing
+    # word_character_counts and word_character_counts * on_time_data[,1]
+    # gives a table with even more columns
     cbind(word_character_counts, word_character_counts * on_time_data[,1])
 }
 
@@ -426,7 +442,8 @@ score <- function(stats, score_cutoffs) {
         min_substantial <- score_cutoffs[[score]]$substantial_comments
         min_total <- score_cutoffs[[score]]$total_comments
         min_words <- score_cutoffs[[score]]$words
-        sel <- ((stats$Substantial.Comments >= min_substantial | stats$Total.On.Time >= min_total) & stats$Word.Count >= min_words)
+        min_hashtags <- score_cutoffs[[score]]$hashtags
+        sel <- ((stats$Substantial.Comments >= min_substantial | stats$Total.On.Time >= min_total) & stats$Word.Count >= min_words & stats$Hashtag.Count >= min_hashtags)
         stats$Score[sel & stats$Score < 0] <- as.numeric(score)
     }
 
@@ -441,14 +458,13 @@ score <- function(stats, score_cutoffs) {
 
 # Figure out which comments are on time and sum the number of on-time comments
 # (this part: sapply(FUN = on_time_credit, data[, 'Time']))
-# for each e-mail address
-# (the outer part: aggregate by list(data[, 'Email']) using sum)
 on_time_counts <- t(sapply(FUN = on_time_credit, data[, 'Time']))
 
-# Sum word counts and character counts for each e-mail address
+# Sum word counts, hashtag counts, and character counts for each e-mail address
 individual_comment_statistics <- t(sapply(data[, "Comment"],
     FUN = count_words_and_characters))
 
+# Group individual_comment_statistics and on_time_counts for each e-mail address
 comment_statistics <- aggregate(
     modify_late(individual_comment_statistics, on_time_counts),
     by = list(data[, "Email"]), FUN = sum)
@@ -471,10 +487,12 @@ on_time_count <- aggregate(on_time_and_long_enough_count,
 #   Orig.Credited.Words if not.
 # * Orig.Char and Character.Count
 #   is the total number of characters in the comment
+# * Orig.Hashtag and Hashtag.Count
+#   is the total number of hashtags in the comment
 # The second set of 4 columns is the same as the first set of 4 columns, but
 # after being multiplied by 1 or 0, depending on whether or not the comment was
 # on time.
-names(comment_statistics) <- c("Email.Address", "Orig.Total.Words", "Orig.Credited.Words", "Orig.Comment.Credited.Words", "Orig.Char", "Total.Word.Count", "Credited.Word.Count", "Comment.Credit.Word.Count", "Character.Count")
+names(comment_statistics) <- c("Email.Address", "Orig.Total.Words", "Orig.Credited.Words", "Orig.Comment.Credited.Words", "Orig.Char", "Orig.Hashtag", "Total.Word.Count", "Credited.Word.Count", "Comment.Credit.Word.Count", "Character.Count", "Hashtag.Count")
 
 # Round off number of comments so something like 3.99 comments (due to partial
 # credit calculation / being less than a minute late) doesn't lose points.
@@ -506,6 +524,9 @@ names(on_time_count) <- c("Email.Address", "Total.Comments", "Partial.Cred.Frac"
 # Merge the two statistics data.frames
 stats <- data.frame(merge(comment_statistics, on_time_count, by = "Email.Address"), Score = -1)
 stats <- score(stats, scoring_cutoffs)
+
+# Read in roster
+rost <- read.xlsx(roster, 1)
 
 # Merge scores with roster via email address
 mg <- merge(rost, stats, by.x = roster_email, by.y = "Email.Address", all.x = TRUE) ## contains email and stu id

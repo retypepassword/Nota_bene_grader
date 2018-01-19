@@ -45,6 +45,7 @@ password: your_password
 ## Don't count comments as substantial_comments if they have fewer than:
 ## (they'll be considered "short_comments" instead)
 min_words_per_comment: 5
+min_hashtag_length: 2
 avg_letters_per_word: 4
 
 ## Recommend leaving this as true, unless you want to allow comments like
@@ -61,20 +62,25 @@ Scores:
     5:
         substantial_comments: 4
         words               : 35
+        hashtags            : 1
         total_comments      : 10
     4:
         substantial_comments: 3
         words               : 35
+        hashtags            : 1
         total_comments      : 8
     3:
         substantial_comments: 3
         words               : 25
+        hashtags            : 1
         total_comments      : 8
     2:
         substantial_comments: 2
         words               : 18
+        hashtags            : 0
         total_comments      : 3
     1:
         substantial_comments: 1
         words               : 9
+        hashtags            : 0
         total_comments      : 1
