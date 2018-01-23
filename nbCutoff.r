@@ -122,7 +122,7 @@ if (prompt_each_time) {
         })
     }
 } else {
-    yaml_file <- yaml.load_file(yaml_name)
+    yaml_file <- yaml.load_file(config_file_name)
 }
 
 # Set configuration options from yaml file
