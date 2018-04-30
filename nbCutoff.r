@@ -22,7 +22,7 @@ update_every <- 5
 ################################################################################
 
 # Keep track of number of runs
-run_num <- 1
+run_num <- 2
 
 # Legacy configuration options (not ported to YAML)
 
@@ -130,25 +130,25 @@ roster <- yaml_file$roster
 roster_sid <- make.names(yaml_file$sid_column)
 roster_email <- make.names(yaml_file$email_column)
 instruct <- yaml_file$instructor
-canvas <- ifelse("canvas" %in% yaml_file, yaml_file$canvas, FALSE)
-canvas_upload <- ifelse("canvas_upload" %in% yaml_file, yaml_file$canvas_upload, FALSE)
+canvas <- ifelse("canvas" %in% names(yaml_file), yaml_file$canvas, FALSE)
+canvas_upload <- ifelse("canvas_upload" %in% names(yaml_file), yaml_file$canvas_upload, FALSE)
 canvas_token <- yaml_file$canvas_token
 canvas_course <- yaml_file$canvas_course_id
 canvas_grades_file <- yaml_file$canvas_grades_file
 EMAIL <- yaml_file$email
 PASSWORD <- yaml_file$password
-MIN_WORDS <- ifelse("min_words_per_comment" %in% yaml_file, yaml_file$min_words_per_comment, 5)
-AVG_CHARS_PER <- ifelse("avg_letters_per_word" %in% yaml_file, yaml_file$avg_letters_per_word, 4)
-WORDS_NOT_BE_SAME_LENGTH <- ifelse("words_cannot_be_same_length" %in% yaml_file, yaml_file$words_cannot_be_same_length, TRUE)
-MINIMUM_HASHTAG_LENGTH <- ifelse("min_hashtag_length" %in% yaml_file, yaml_file$min_hashtag_length, 0)
+MIN_WORDS <- ifelse("min_words_per_comment" %in% names(yaml_file), yaml_file$min_words_per_comment, 5)
+AVG_CHARS_PER <- ifelse("avg_letters_per_word" %in% names(yaml_file), yaml_file$avg_letters_per_word, 4)
+WORDS_NOT_BE_SAME_LENGTH <- ifelse("words_cannot_be_same_length" %in% names(yaml_file), yaml_file$words_cannot_be_same_length, TRUE)
+MINIMUM_HASHTAG_LENGTH <- ifelse("min_hashtag_length" %in% names(yaml_file), yaml_file$min_hashtag_length, 0)
 scoring_cutoffs <- yaml_file$Scores
 
 # Fill empty scoring cutoff entries with 0
 for (score in names(scoring_cutoffs)) {
-    scoring_cutoffs[[score]]$substantial_comments <- ifelse("substantial_comments" %in% scoring_cutoffs[[score]], scoring_cutoffs[[score]]$substantial_comments, 0)
-    scoring_cutoffs[[score]]$total_comments <- ifelse("total_comments" %in% scoring_cutoffs[[score]], scoring_cutoffs[[score]]$total_comments, 0)
-    scoring_cutoffs[[score]]$words <- ifelse("words" %in% scoring_cutoffs[[score]], scoring_cutoffs[[score]]$words, 0)
-    scoring_cutoffs[[score]]$hashtags <- ifelse("hashtags" %in% scoring_cutoffs[[score]], scoring_cutoffs[[score]]$hashtags, 0)
+    scoring_cutoffs[[score]]$substantial_comments <- ifelse("substantial_comments" %in% names(scoring_cutoffs[[score]]), scoring_cutoffs[[score]]$substantial_comments, 0)
+    scoring_cutoffs[[score]]$total_comments <- ifelse("total_comments" %in% names(scoring_cutoffs[[score]]), scoring_cutoffs[[score]]$total_comments, 0)
+    scoring_cutoffs[[score]]$words <- ifelse("words" %in% names(scoring_cutoffs[[score]]), scoring_cutoffs[[score]]$words, 0)
+    scoring_cutoffs[[score]]$hashtags <- ifelse("hashtags" %in% names(scoring_cutoffs[[score]]), scoring_cutoffs[[score]]$hashtags, 0)
 }
     
 # Set assignment name
@@ -689,5 +689,6 @@ submission_handle <- POST(url = paste("https://canvas.ucdavis.edu/api/v1/courses
 status <- content(submission_handle)
 
 # cat(paste("Upload status: ", status$workflow_state, "\n", sep = ""))
+
 
 
