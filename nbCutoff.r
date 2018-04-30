@@ -130,19 +130,27 @@ roster <- yaml_file$roster
 roster_sid <- make.names(yaml_file$sid_column)
 roster_email <- make.names(yaml_file$email_column)
 instruct <- yaml_file$instructor
-canvas <- yaml_file$canvas
-canvas_upload <- yaml_file$canvas_upload
+canvas <- ifelse("canvas" %in% yaml_file, yaml_file$canvas, FALSE)
+canvas_upload <- ifelse("canvas_upload" %in% yaml_file, yaml_file$canvas_upload, FALSE)
 canvas_token <- yaml_file$canvas_token
 canvas_course <- yaml_file$canvas_course_id
 canvas_grades_file <- yaml_file$canvas_grades_file
 EMAIL <- yaml_file$email
 PASSWORD <- yaml_file$password
-MIN_WORDS <- yaml_file$min_words_per_comment
-AVG_CHARS_PER <- yaml_file$avg_letters_per_word
-WORDS_NOT_BE_SAME_LENGTH <- yaml_file$words_cannot_be_same_length
-MINIMUM_HASHTAG_LENGTH <- yaml_file$min_hashtag_length
+MIN_WORDS <- ifelse("min_words_per_comment" %in% yaml_file, yaml_file$min_words_per_comment, 5)
+AVG_CHARS_PER <- ifelse("avg_letters_per_word" %in% yaml_file, yaml_file$avg_letters_per_word, 4)
+WORDS_NOT_BE_SAME_LENGTH <- ifelse("words_cannot_be_same_length" %in% yaml_file, yaml_file$words_cannot_be_same_length, TRUE)
+MINIMUM_HASHTAG_LENGTH <- ifelse("min_hashtag_length" %in% yaml_file, yaml_file$min_hashtag_length, 0)
 scoring_cutoffs <- yaml_file$Scores
 
+# Fill empty scoring cutoff entries with 0
+for (score in names(scoring_cutoffs)) {
+    scoring_cutoffs[[score]]$substantial_comments <- ifelse("substantial_comments" %in% scoring_cutoffs[[score]], scoring_cutoffs[[score]]$substantial_comments, 0)
+    scoring_cutoffs[[score]]$total_comments <- ifelse("total_comments" %in% scoring_cutoffs[[score]], scoring_cutoffs[[score]]$total_comments, 0)
+    scoring_cutoffs[[score]]$words <- ifelse("words" %in% scoring_cutoffs[[score]], scoring_cutoffs[[score]]$words, 0)
+    scoring_cutoffs[[score]]$hashtags <- ifelse("hashtags" %in% scoring_cutoffs[[score]], scoring_cutoffs[[score]]$hashtags, 0)
+}
+    
 # Set assignment name
 if (usingRScript()) {
     cat("Enter the name of the assignment (for Canvas, e.g. NB1): ")
@@ -658,9 +666,18 @@ canvas_grades_new <- cbind(canvas_grades_new, canvas_grades_orig[,seq(section_id
 date_and_time <- format(Sys.time(), format = "%d_%b_%H_%M", tz = "America/Los_Angeles")
 write.csv(canvas_grades_new, file = paste(date_and_time, canvas_grades_file, sep = "_"), row.names = FALSE, na = "")
 
-########## Upload scores to Canvas #########
 if (!canvas_upload) quit()
+                                                                                                    
+if (usingRScript()) {
+    cat("Upload to canvas? (Yes or No) ")
+    allow_upload <- readLines(STDIN, 1)
+} else {
+    allow_upload <- readline("Upload to canvas? (Yes or No) ")
+}
 
+########## Upload scores to Canvas #########
+if (!grepl("y", tolower(allow_upload), fixed = TRUE) quit()
+                                                                                                    
 ### Stick grades straight onto Canvas
 cat("Uploading scores...\n")
 
