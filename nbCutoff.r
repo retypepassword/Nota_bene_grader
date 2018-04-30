@@ -676,7 +676,7 @@ if (usingRScript()) {
 }
 
 ########## Upload scores to Canvas #########
-if (!grepl("y", tolower(allow_upload), fixed = TRUE) quit()
+if (!grepl("y", tolower(allow_upload), fixed = TRUE)) quit()
                                                                                                     
 ### Stick grades straight onto Canvas
 cat("Uploading scores...\n")
