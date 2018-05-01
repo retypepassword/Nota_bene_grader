@@ -22,7 +22,7 @@ update_every <- 5
 ################################################################################
 
 # Keep track of number of runs
-run_num <- 2
+run_num <- 1
 
 # Legacy configuration options (not ported to YAML)
 
@@ -248,17 +248,10 @@ if (usingRScript()) {
     assign_num <- as.numeric(readline("Enter the assignment number (1 - 10): "))
 }
 
-# Get the due date for the retrieved nota bene (assuming the displayed time
-# is written in Pacific Time). Convert to UTC because comment submission times
-# are stored in UTC. Store as Pacific Time (no tz defaults to local time) even
-# though it's actually UTC so less code has to be written later.
-due_date <- as.POSIXct(
-    format(
-        as.POSIXct(nb_assig_data$payload$files[[as.character(nb_id)]]$due,
-        format = "%FT%T",
-        tz = "America/Los_Angeles"),
-     tz = "UTC")
-)
+# Due date and comment date are both stored in UTC
+due_date <- as.POSIXct(nb_assig_data$payload$files[[as.character(nb_id)]]$due,
+    format = "%FT%T",
+    tz = "UTC")
 
 # Should be exactly the same as the class id entered above
 ensemble_id <- as.numeric(nb_assig_data$payload$files[[as.character(nb_id)]]$id_ensemble)
@@ -391,7 +384,7 @@ count_words_and_characters <- function(comment) {
 # obtain, for each student, the amount of credit given for each comment and the
 # total number of comments
 on_time_credit <- function(x) {
-    comment_date <- as.POSIXct(x, format='%FT%T')
+    comment_date <- as.POSIXct(x, format='%FT%T', tz="UTC")
     # When summed, becomes
                 # On.Time                        Total.Comments
     if (GRADE_MODE <= 0) {
